@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: 208c0063899c31d4680b607e34f93252
+guid: bf7151579c38e2a44be94ba8773876c1
 ModelImporter:
   serializedVersion: 22200
   internalIDToNameTable: []
@@ -43,7 +43,7 @@ ModelImporter:
     importBlendShapes: 1
     importCameras: 1
     importLights: 1
-    nodeNameCollisionStrategy: 1
+    nodeNameCollisionStrategy: 0
     fileIdsGeneration: 2
     swapUVChannels: 0
     generateSecondaryUV: 0
@@ -99,7 +99,7 @@ ModelImporter:
   humanoidOversampling: 1
   avatarSetup: 0
   addHumanoidExtraRootOnlyWhenUsingAvatar: 1
-  importBlendShapeDeformPercent: 1
+  importBlendShapeDeformPercent: 0
   remapMaterialsIfMaterialImportModeIsNone: 0
   additionalBone: 0
   userData: 
