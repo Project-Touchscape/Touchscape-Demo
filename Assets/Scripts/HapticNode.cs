@@ -23,9 +23,6 @@ public class HapticNode : MonoBehaviour
     // HapticRenderClient script
     private HapticRenderClient haptics;
 
-    // Shadow object script
-    private HapticShadow shadow;
-
     //Mirror position
     private Vector3 mirrorPos = Vector3.zero;
 
@@ -48,7 +45,8 @@ public class HapticNode : MonoBehaviour
     private Vector3 forceOnMirror = Vector3.zero;
 
     // Current collision candidate
-    private HapticShadow.CollisionCandidate currCandidate = new HapticShadow.CollisionCandidate();
+    private CollisionCandidate currCandidate = new CollisionCandidate();
+    private Collider shadowCollider;
 
     // Maximum stiffness and damping
     private float maxStiffness;
@@ -60,11 +58,14 @@ public class HapticNode : MonoBehaviour
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
-        // Links to shadow script
-        shadow = shadowObject.GetComponent<HapticShadow>();
-        shadow.SetHapticNode(this);
+        // HapticNode now lives on the former shadow object. Keep the field for
+        // scene compatibility, but use this GameObject when it is not assigned.
+        if (shadowObject == null)
+            shadowObject = gameObject;
+
         // Gets shadow object rigidbody
-        shadowRb = shadowObject.GetComponent<Rigidbody>();
+        shadowRb = GetComponent<Rigidbody>();
+        shadowCollider = GetComponent<Collider>();
         // Gets maximum stiffness and damping values (would bring object to rest in one frame)
         maxStiffness = shadowRb.mass / Mathf.Pow(Time.fixedDeltaTime, 2);
         maxDamping = shadowRb.mass / Time.fixedDeltaTime;
@@ -72,6 +73,31 @@ public class HapticNode : MonoBehaviour
         // Visuals start off
         forceVisual.SetActive(false);
         collisionVisual.SetActive(false);
+    }
+
+    void OnTriggerEnter(Collider other)
+    {
+        EvaluateTrigger(other);
+    }
+
+    void OnTriggerStay(Collider other)
+    {
+        EvaluateTrigger(other);
+    }
+
+    private void EvaluateTrigger(Collider other)
+    {
+        if (other.isTrigger || shadowCollider == null || shadowRb == null)
+            return;
+
+        if (CollisionCandidate.FromRaycast(shadowCollider, other, out CollisionCandidate candidate))
+        {
+            int result = currCandidate.CompareTo(candidate);
+            if (result < 0)
+                currCandidate = candidate;
+            else if (result == 0)
+                currCandidate.CombineWith(candidate);
+        }
     }
 
     public void SetHaptics(HapticRenderClient haptics)
@@ -128,6 +154,10 @@ public class HapticNode : MonoBehaviour
 
         // Updates previous shadow velocity
         prevShadowVel = shadowRb.linearVelocity;
+
+        // Publish candidates after trigger callbacks have been evaluated for this physics step.
+        UpdateCollisionCandidate(currCandidate);
+        currCandidate = new CollisionCandidate();
     }
 
     private void UpdateForceVisual(Vector3 force)
@@ -149,12 +179,12 @@ public class HapticNode : MonoBehaviour
     private void UpdateCollisionVisual()
     {
         // If visualization is on and a collision candidate is active
-        if (haptics.visualization && currCandidate.isValid())
+        if (haptics.visualization && currCandidate.IsValid())
         {
             collisionVisual.SetActive(true);
             // Positions and orients to match collision plane
-            collisionVisual.transform.position = shadowObject.transform.position + currCandidate.getCollisionPoint();
-            collisionVisual.transform.rotation = Quaternion.FromToRotation(Vector3.up, currCandidate.getCollisionNormal());
+            collisionVisual.transform.position = shadowObject.transform.position + currCandidate.GetCollisionPoint();
+            collisionVisual.transform.rotation = Quaternion.FromToRotation(Vector3.up, currCandidate.GetCollisionNormal());
         }
         else
         {
@@ -337,16 +367,16 @@ public class HapticNode : MonoBehaviour
         return predictedForce;
     }
 
-    public void UpdateCollisionCandidate(HapticShadow.CollisionCandidate candidate)
+    public void UpdateCollisionCandidate(CollisionCandidate candidate)
     {
         // Sends collision candidate to haptic client if it is valid
-        if (candidate.isValid())
+        if (candidate.IsValid())
         {
             haptics.SendCollisionCandidate(candidate);
         }
 
         // Updates current collision candidate using copy constructor
-        currCandidate = new HapticShadow.CollisionCandidate(candidate);
+        currCandidate = new CollisionCandidate(candidate);
     }
 
     private float MomentOfInertiaAlongAxis(Rigidbody rb, Vector3 axis)
@@ -368,5 +398,137 @@ public class HapticNode : MonoBehaviour
     private void OnApplicationQuit()
     {
         
+    }
+
+    public class CollisionCandidate
+    {
+        private Vector3 collisionPoint = Vector3.zero;
+        private Vector3 collisionNormal = Vector3.zero;
+        private Vector3 momentumChange = Vector3.zero;
+        private float timeUntilCollision;
+
+        public CollisionCandidate()
+        {
+        }
+
+        public CollisionCandidate(CollisionCandidate other)
+            : this(other.GetCollisionPoint(), other.GetCollisionNormal(),
+                other.GetMomentumChange(), other.GetTimeUntilCollision())
+        {
+        }
+
+        private CollisionCandidate(
+            Vector3 collisionPoint,
+            Vector3 collisionNormal,
+            Vector3 momentumChange,
+            float timeUntilCollision)
+        {
+            this.collisionPoint = collisionPoint;
+            this.collisionNormal = collisionNormal;
+            this.momentumChange = momentumChange;
+            this.timeUntilCollision = timeUntilCollision;
+        }
+
+        public static bool FromRaycast(Collider self, Collider other, out CollisionCandidate result)
+        {
+            Vector3 selfVelocity = self.attachedRigidbody.linearVelocity;
+            Vector3 otherVelocity = other.attachedRigidbody == null
+                ? Vector3.zero
+                : other.attachedRigidbody.linearVelocity;
+            Vector3 relativeVelocity = selfVelocity - otherVelocity;
+
+            if (relativeVelocity.sqrMagnitude <= Mathf.Epsilon)
+            {
+                result = null;
+                return false;
+            }
+
+            Vector3 direction = relativeVelocity.normalized;
+            if (!other.Raycast(new Ray(self.bounds.center, direction), out RaycastHit selfToOther, Mathf.Infinity) ||
+                !self.Raycast(new Ray(selfToOther.point, -direction), out RaycastHit contactToSelf, Mathf.Infinity))
+            {
+                result = null;
+                return false;
+            }
+
+            float timeUntilCollision = contactToSelf.distance / relativeVelocity.magnitude;
+            Vector3 collisionPoint = selfVelocity * timeUntilCollision;
+            Vector3 collisionNormal = selfToOther.normal;
+            float selfMass = self.attachedRigidbody.mass;
+            Vector3 momentumChange;
+
+            if (other.attachedRigidbody == null)
+            {
+                momentumChange = 2f * selfMass *
+                    Vector3.Dot(relativeVelocity, collisionNormal) * collisionNormal;
+            }
+            else
+            {
+                float otherMass = other.attachedRigidbody.mass;
+                float initialSelfVelocity = Vector3.Dot(selfVelocity, collisionNormal);
+                float initialOtherVelocity = Vector3.Dot(otherVelocity, collisionNormal);
+                float finalSelfVelocity =
+                    (2f * otherMass * initialOtherVelocity +
+                        (selfMass - otherMass) * initialSelfVelocity) /
+                    (selfMass + otherMass);
+                momentumChange = selfMass *
+                    (finalSelfVelocity - initialSelfVelocity) * collisionNormal;
+            }
+
+            result = new CollisionCandidate(
+                collisionPoint, collisionNormal, momentumChange, timeUntilCollision);
+            return true;
+        }
+
+        public float GetTimeUntilCollision()
+        {
+            return timeUntilCollision;
+        }
+
+        public Vector3 GetCollisionPoint()
+        {
+            return collisionPoint;
+        }
+
+        public Vector3 GetCollisionNormal()
+        {
+            return collisionNormal;
+        }
+
+        public Vector3 GetMomentumChange()
+        {
+            return momentumChange;
+        }
+
+        public bool IsValid()
+        {
+            return momentumChange.sqrMagnitude > 0f;
+        }
+
+        public int CompareTo(CollisionCandidate other)
+        {
+            if (!IsValid())
+                return -1;
+            if (!other.IsValid())
+                return 1;
+
+            float time = GetTimeUntilCollision();
+            float otherTime = other.GetTimeUntilCollision();
+            if (otherTime >= 2f * time)
+                return 1;
+            if (time >= 2f * otherTime)
+                return -1;
+            return 0;
+        }
+
+        public void CombineWith(CollisionCandidate other)
+        {
+            momentumChange += other.GetMomentumChange();
+            if (other.GetTimeUntilCollision() < GetTimeUntilCollision())
+            {
+                timeUntilCollision = other.GetTimeUntilCollision();
+                collisionPoint = other.GetCollisionPoint();
+            }
+        }
     }
 }

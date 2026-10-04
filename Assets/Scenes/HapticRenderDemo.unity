@@ -311,12 +311,13 @@ MonoBehaviour:
   m_GameObject: {fileID: 84159652}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 774c8f62d35c31b4f9e10d5591a386da, type: 3}
+  m_Script: {fileID: 11500000, guid: 470e162bd621b6d40be59e803bb72e8e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  node: {fileID: 0}
-  shadowRigidbody: {fileID: 0}
-  shadowCollider: {fileID: 0}
+  mirrorObject: {fileID: 6166584}
+  shadowObject: {fileID: 84159652}
+  forceVisual: {fileID: 754136741}
+  collisionVisual: {fileID: 288569793}
 --- !u!135 &84159657
 SphereCollider:
   m_ObjectHideFlags: 0
@@ -1894,7 +1895,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   serverAddress: 127.0.0.1
   serverPort: 8080
-  nodeObject: {fileID: 1995008541}
+  nodeObject: {fileID: 84159652}
   forceFeedback: 0
   collisionFeedback: 0
   inertia: 0
@@ -1930,7 +1931,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1995008543}
-  - component: {fileID: 1995008542}
   m_Layer: 0
   m_Name: HapticNode
   m_TagString: Untagged
@@ -1938,22 +1938,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1995008542
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1995008541}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 470e162bd621b6d40be59e803bb72e8e, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  mirrorObject: {fileID: 6166584}
-  shadowObject: {fileID: 84159652}
-  forceVisual: {fileID: 754136741}
-  collisionVisual: {fileID: 288569793}
 --- !u!4 &1995008543
 Transform:
   m_ObjectHideFlags: 0

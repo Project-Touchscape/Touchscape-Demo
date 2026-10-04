@@ -26,7 +26,7 @@ public class HapticRenderClient : MonoBehaviour
     // Whether inertia is enabled
     public bool inertia = false;
 
-    // Checkbox for enabling gravity on HapticShadow
+    // Checkbox for enabling gravity on the haptic node's rigidbody
     public bool gravity = false;
 
     // Stiffness and damping coefficients
@@ -86,7 +86,7 @@ public class HapticRenderClient : MonoBehaviour
         // Sets haptic render client
         node.SetHaptics(this);
 
-        // Set initial gravity state on HapticShadow's Rigidbody
+        // Set initial gravity state on the haptic node's Rigidbody
         var shadowObj = node.shadowObject;
         var shadowRb = shadowObj.GetComponent<Rigidbody>();
         shadowRb.useGravity = gravity;
@@ -176,7 +176,7 @@ public class HapticRenderClient : MonoBehaviour
         }
     }
 
-    public void SendCollisionCandidate(HapticShadow.CollisionCandidate candidate)
+    public void SendCollisionCandidate(HapticNode.CollisionCandidate candidate)
     {
         if (!debugMode && collisionFeedback)
         {
@@ -184,9 +184,9 @@ public class HapticRenderClient : MonoBehaviour
             {
                 client.writeRequest((byte)Headers.COLLISION_FEEDBACK);
                 // Send the contact point, collision normal, and time until collision to the server
-                client.writeVector3(unityToHardwarePos(nodeObject.transform.position + candidate.getCollisionPoint()));
-                client.writeVector3(unityToHardwareForce(candidate.getCollisionNormal()));
-                client.writeFloat(candidate.getTimeUntilCollision());
+                client.writeVector3(unityToHardwarePos(nodeObject.transform.position + candidate.GetCollisionPoint()));
+                client.writeVector3(unityToHardwareForce(candidate.GetCollisionNormal()));
+                client.writeFloat(candidate.GetTimeUntilCollision());
                 client.sendAll();
             }
         }
