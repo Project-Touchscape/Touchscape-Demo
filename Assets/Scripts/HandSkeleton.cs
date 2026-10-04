@@ -8,9 +8,6 @@ public class HandSkeleton : MonoBehaviour
     private XRHand hand;
     private ArticulationBody   palmBody;
     private BoxCollider        palmCollider;
-    private int                lastFrameTeleport = 0;
-    private bool               ghosted = false;
-    private int                layerMask;
 
     public GameObject palm;
     public GameObject[] initialFingerJoints = new GameObject[N_FINGERS];
@@ -32,18 +29,6 @@ public class HandSkeleton : MonoBehaviour
 
     void Start()
     {
-        // Build a collision mask for the hand so it can interact with the scene without
-        // colliding with layers that should be ignored.
-        int myLayer = gameObject.layer;
-        layerMask = 0;
-        for (int i = 0; i < 32; i++)
-        {
-            if (!Physics.GetIgnoreLayerCollision(myLayer, i))
-            {
-                layerMask |= 1 << i;
-            }
-        }
-
         // Initialize palm articulation body and collider
         ConstructPalm();
         ConstructFingers();
@@ -148,52 +133,5 @@ public class HandSkeleton : MonoBehaviour
             lowerLimit = -10f,
             upperLimit = 89f
         };
-    }
-
-    public void UpdateHand()
-    {
-        /*// Safe access: XRHand joints are not guaranteed to be populated until tracking is active.
-        // Calling GetJoint() before that point can throw because the internal joint array is still empty.
-        if (hand == null || palmBody == null || !hand.isTracked)
-            return;
-
-        if (!TryGetJointPose(XRHandJointID.Palm, out var palmPose))
-            return;
-
-        // Keep the physics palm aligned to the tracked XR palm.
-        palmBody.TeleportRoot(palmPose.position, palmPose.rotation);
-
-        if (handPalm != null)
-        {
-            handPalm.position = palmBody.transform.position - (palmBody.transform.forward * 0.06f);
-            handPalm.rotation = palmBody.transform.rotation * Quaternion.Euler(
-                hand.handedness == Handedness.Left ? 180f : 0f,
-                hand.handedness == Handedness.Left ? 90f : -90f,
-                0f);
-        }
-
-        // Update the finger articulation bodies from valid tracked joint poses only.
-        for (int fingerIndex = 0; fingerIndex < N_FINGERS; fingerIndex++)
-        {
-            XRHandJointID[] jointIds = GetFingerJointIds((XRHandFingerID)fingerIndex);
-            if (jointIds == null || jointIds.Length == 0)
-                continue;
-
-            for (int jointIndex = 0; jointIndex < N_ACTIVE_BONES; jointIndex++)
-            {
-                int bodyIndex = fingerIndex * N_ACTIVE_BONES + jointIndex;
-                if (bodyIndex >= articulationBodies.Length || articulationBodies[bodyIndex] == null)
-                    continue;
-
-                if (jointIndex >= jointIds.Length)
-                    continue;
-
-                if (!TryGetJointPose(jointIds[jointIndex], out var fingerPose))
-                    continue;
-
-                ArticulationBody body = articulationBodies[bodyIndex];
-                body.transform.SetPositionAndRotation(fingerPose.position, fingerPose.rotation);
-            }
-        }*/
     }
 }

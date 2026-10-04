@@ -14,9 +14,6 @@ public class HapticRenderClient : MonoBehaviour
     [SerializeField] private string serverAddress = "127.0.0.1"; // Default to localhost
     [SerializeField] private int serverPort = 8080; // Default port
 
-    // Game object that controls haptic interaction
-    public GameObject nodeObject;
-
     // Whether force feedback is sent to server
     public bool forceFeedback = true;
 
@@ -81,16 +78,11 @@ public class HapticRenderClient : MonoBehaviour
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     async void Start()
     {
-        //Gets haptic node component
-        node = nodeObject.GetComponent<HapticNode>();
-        // Sets haptic render client
-        node.SetHaptics(this);
-
         // Set initial gravity state on the haptic node's Rigidbody
-        var shadowObj = node.shadowObject;
-        var shadowRb = shadowObj.GetComponent<Rigidbody>();
-        shadowRb.useGravity = gravity;
-        prevGravity = gravity;
+        //var shadowObj = node.shadowObject;
+        //var shadowRb = shadowObj.GetComponent<Rigidbody>();
+        //shadowRb.useGravity = gravity;
+        //prevGravity = gravity;
 
         //Handles client setup
         client = new MinBiTTcpClient();
@@ -178,7 +170,7 @@ public class HapticRenderClient : MonoBehaviour
 
     public void SendCollisionCandidate(HapticNode.CollisionCandidate candidate)
     {
-        if (!debugMode && collisionFeedback)
+        /*if (!debugMode && collisionFeedback)
         {
             lock (commLock)
             {
@@ -189,7 +181,7 @@ public class HapticRenderClient : MonoBehaviour
                 client.writeFloat(candidate.GetTimeUntilCollision());
                 client.sendAll();
             }
-        }
+        }*/
     }
 
     // Fixed update is called once per physics frame
@@ -202,7 +194,7 @@ public class HapticRenderClient : MonoBehaviour
     void Update()
     {
         // Update gravity state if changed
-        if (node != null && node.shadowObject != null)
+        /*if (node != null && node.shadowObject != null)
         {
             if (gravity != prevGravity)
             {
@@ -210,7 +202,7 @@ public class HapticRenderClient : MonoBehaviour
                 shadowRb.useGravity = gravity;
                 prevGravity = gravity;
             }
-        }
+        }*/
     }
 
     private Vector3 hardwareToUnityForce(Vector3 force)

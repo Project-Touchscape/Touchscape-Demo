@@ -8,20 +8,17 @@ using UnityEngine;
 
 public class HapticNode : MonoBehaviour
 {
+    // HapticRenderClient script
+    public HapticRenderClient haptics;
+
     //Mirror object
     public GameObject mirrorObject;
-
-    // Game object to interact with environment
-    public GameObject shadowObject;
 
     // Force visualization object
     public GameObject forceVisual;
 
     // Collision visualization object
     public GameObject collisionVisual;
-
-    // HapticRenderClient script
-    private HapticRenderClient haptics;
 
     //Mirror position
     private Vector3 mirrorPos = Vector3.zero;
@@ -58,11 +55,6 @@ public class HapticNode : MonoBehaviour
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
-        // HapticNode now lives on the former shadow object. Keep the field for
-        // scene compatibility, but use this GameObject when it is not assigned.
-        if (shadowObject == null)
-            shadowObject = gameObject;
-
         // Gets shadow object rigidbody
         shadowRb = GetComponent<Rigidbody>();
         shadowCollider = GetComponent<Collider>();
@@ -98,16 +90,6 @@ public class HapticNode : MonoBehaviour
             else if (result == 0)
                 currCandidate.CombineWith(candidate);
         }
-    }
-
-    public void SetHaptics(HapticRenderClient haptics)
-    {
-        this.haptics = haptics;
-    }
-
-    public HapticRenderClient GetHaptics()
-    {
-        return haptics;
     }
 
     // Fixed update is called once per physics frame
@@ -183,7 +165,7 @@ public class HapticNode : MonoBehaviour
         {
             collisionVisual.SetActive(true);
             // Positions and orients to match collision plane
-            collisionVisual.transform.position = shadowObject.transform.position + currCandidate.GetCollisionPoint();
+            collisionVisual.transform.position = gameObject.transform.position + currCandidate.GetCollisionPoint();
             collisionVisual.transform.rotation = Quaternion.FromToRotation(Vector3.up, currCandidate.GetCollisionNormal());
         }
         else
@@ -295,7 +277,7 @@ public class HapticNode : MonoBehaviour
     {
         // Gets relative position and velocities of mirror and shadow objects
         Vector3 mirrorPosCopy = mirrorObject.transform.position;
-        Vector3 shadowPos = shadowObject.transform.position;
+        Vector3 shadowPos = gameObject.transform.position;
 
         Vector3 shadowVel = shadowRb.linearVelocity;
 
@@ -314,7 +296,7 @@ public class HapticNode : MonoBehaviour
     {
         // Get orientations and angular velocities
         Quaternion mirrorRotCopy = mirrorObject.transform.rotation;
-        Quaternion shadowRot = shadowObject.transform.rotation;
+        Quaternion shadowRot = gameObject.transform.rotation;
 
         Vector3 shadowAngVel = shadowRb.angularVelocity;
 
@@ -355,7 +337,7 @@ public class HapticNode : MonoBehaviour
         //Gets previous mirror and shadow positions
         Vector3 mirrorPosCopy = mirrorObject.transform.position;
         Vector3 prevMirrorPos = mirrorPosCopy - mirrorVel * Time.fixedDeltaTime;
-        Vector3 prevShadowPos = shadowObject.transform.position - shadowRb.linearVelocity * Time.fixedDeltaTime;
+        Vector3 prevShadowPos = gameObject.transform.position - shadowRb.linearVelocity * Time.fixedDeltaTime;
 
         //Gets predicted current shadow position and velocity
         Vector3 predShadowVel = -haptics.stiffness * (prevShadowPos - prevMirrorPos) / Time.fixedDeltaTime + prevShadowVel * (1 - haptics.damping);
