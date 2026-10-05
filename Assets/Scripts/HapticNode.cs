@@ -11,8 +11,8 @@ public class HapticNode : MonoBehaviour
     // HapticRenderClient script
     public HapticRenderClient haptics;
 
-    //Mirror object
-    public GameObject mirrorObject;
+    // Tracking object
+    public Transform trackedTransform;
 
     // Force visualization object
     public GameObject forceVisual;
@@ -20,30 +20,30 @@ public class HapticNode : MonoBehaviour
     // Collision visualization object
     public GameObject collisionVisual;
 
-    //Mirror position
-    private Vector3 mirrorPos = Vector3.zero;
+    //Tracked position
+    private Vector3 trackedPos = Vector3.zero;
 
-    //Mirror orientation
-    private Quaternion mirrorRot = Quaternion.identity;
+    //Tracked orientation
+    private Quaternion trackedRot = Quaternion.identity;
 
-    //Mirror velocity
-    private Vector3 mirrorVel = Vector3.zero;
+    //Tracked velocity
+    private Vector3 trackedVel = Vector3.zero;
 
-    //Mirror acceleration
-    private Vector3 mirrorAccel = Vector3.zero;
+    //Tracked acceleration
+    private Vector3 trackedAccel = Vector3.zero;
 
-    // Rigidbody of the shadow object
-    private Rigidbody shadowRb;
+    // ArticulationBody of the physics object
+    private ArticulationBody physicsAb;
 
-    //Previous velocity of shadow object
-    private Vector3 prevShadowVel = Vector3.zero;
+    //Previous velocity of physics object
+    private Vector3 prevPhysicsVel = Vector3.zero;
 
-    // Force to emulate with mirror object
-    private Vector3 forceOnMirror = Vector3.zero;
+    // Force to emulate with tracked object
+    private Vector3 forceOnTracked = Vector3.zero;
 
     // Current collision candidate
     private CollisionCandidate currCandidate = new CollisionCandidate();
-    private Collider shadowCollider;
+    private Collider physicsCollider;
 
     // Maximum stiffness and damping
     private float maxStiffness;
@@ -55,16 +55,16 @@ public class HapticNode : MonoBehaviour
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
-        // Gets shadow object rigidbody
-        shadowRb = GetComponent<Rigidbody>();
-        shadowCollider = GetComponent<Collider>();
+        // Gets physics object rigidbody
+        physicsAb = gameObject.GetComponent<ArticulationBody>();
+        physicsCollider = gameObject.GetComponent<Collider>();
         // Gets maximum stiffness and damping values (would bring object to rest in one frame)
-        maxStiffness = shadowRb.mass / Mathf.Pow(Time.fixedDeltaTime, 2);
-        maxDamping = shadowRb.mass / Time.fixedDeltaTime;
+        maxStiffness = physicsAb.mass / Mathf.Pow(Time.fixedDeltaTime, 2);
+        maxDamping = physicsAb.mass / Time.fixedDeltaTime;
 
         // Visuals start off
-        forceVisual.SetActive(false);
-        collisionVisual.SetActive(false);
+        //forceVisual.SetActive(false);
+        //collisionVisual.SetActive(false);
     }
 
     void OnTriggerEnter(Collider other)
@@ -79,10 +79,10 @@ public class HapticNode : MonoBehaviour
 
     private void EvaluateTrigger(Collider other)
     {
-        if (other.isTrigger || shadowCollider == null || shadowRb == null)
+        if (other.isTrigger || physicsCollider == null || physicsAb == null)
             return;
 
-        if (CollisionCandidate.FromRaycast(shadowCollider, other, out CollisionCandidate candidate))
+        if (CollisionCandidate.FromRaycast(physicsCollider, other, out CollisionCandidate candidate))
         {
             int result = currCandidate.CompareTo(candidate);
             if (result < 0)
@@ -97,24 +97,24 @@ public class HapticNode : MonoBehaviour
     {
         // Updates debug movement if debug mode is enabled
         UpdateDebugMovement();
-        // Update kinematics of the mirror object
+        // Update kinematics of the tracked object
         UpdateKinematics();
-        // Calculate the force and torque on the shadow object
-        Vector3 forceOnShadow = ComputeForceOnShadow();
-        Vector3 torqueOnShadow = ComputeTorqueOnShadow();
-        shadowRb.AddForce(forceOnShadow);
-        shadowRb.AddTorque(torqueOnShadow);
+        // Calculate the force and torque on the physics object
+        Vector3 forceOnPhysics = ComputeForceOnPhysics();
+        Vector3 torqueOnPhysics = ComputeTorqueOnPhysics();
+        physicsAb.AddForce(forceOnPhysics);
+        physicsAb.AddTorque(torqueOnPhysics);
 
-        // Calculate the force to emulate on the mirror object
-        Vector3 force = -forceOnShadow;
-        // Removes spring component of shadow object from the force vector
+        // Calculate the force to emulate on the tracked object
+        Vector3 force = -forceOnPhysics;
+        // Removes spring component of physics object from the force vector
         force += GetSpringComponent();
 
-        // If inertia is enabled, adds inertial force to the mirror
+        // If inertia is enabled, adds inertial force to the tracked
         if (haptics.inertia)
         {
-            // Gets inertial force on mirror object
-            Vector3 inertialForce = - shadowRb.mass * mirrorAccel / Time.fixedDeltaTime;
+            // Gets inertial force on tracked object
+            Vector3 inertialForce = - physicsAb.mass * trackedAccel / Time.fixedDeltaTime;
             // Adds inertial force to the force vector
             force += inertialForce;
         }
@@ -125,8 +125,8 @@ public class HapticNode : MonoBehaviour
             force = Vector3.zero;
         }
 
-        SetForceOnMirror(force);
-        //Debug.Log($"Force on mirror: {force.magnitude}");
+        SetForceOnTracked(force);
+        //Debug.Log($"Force on tracked: {force.magnitude}");
 
         // Updates force visualization
         UpdateForceVisual(force);
@@ -134,8 +134,8 @@ public class HapticNode : MonoBehaviour
         // Updates collision visualization
         UpdateCollisionVisual();
 
-        // Updates previous shadow velocity
-        prevShadowVel = shadowRb.linearVelocity;
+        // Updates previous physics velocity
+        prevPhysicsVel = physicsAb.linearVelocity;
 
         // Publish candidates after trigger callbacks have been evaluated for this physics step.
         UpdateCollisionCandidate(currCandidate);
@@ -144,7 +144,7 @@ public class HapticNode : MonoBehaviour
 
     private void UpdateForceVisual(Vector3 force)
     {
-        // If visualization is on and a force is present
+        /*// If visualization is on and a force is present
         if (haptics.visualization && force.magnitude > 0)
         {
             forceVisual.SetActive(true);
@@ -155,12 +155,12 @@ public class HapticNode : MonoBehaviour
         else
         {
             forceVisual.SetActive(false);
-        }
+        }*/
     }
 
     private void UpdateCollisionVisual()
     {
-        // If visualization is on and a collision candidate is active
+        /*// If visualization is on and a collision candidate is active
         if (haptics.visualization && currCandidate.IsValid())
         {
             collisionVisual.SetActive(true);
@@ -171,7 +171,7 @@ public class HapticNode : MonoBehaviour
         else
         {
             collisionVisual.SetActive(false);
-        }
+        }*/
     }
 
     // Update is called once per frame
@@ -183,108 +183,108 @@ public class HapticNode : MonoBehaviour
     private void UpdateDebugMovement()
     {
         // Updates player movement
-        if (haptics.debugMode)
+        /*if (haptics.debugMode)
         {
-            // Moves mirror object in 3d with arrow keys
+            // Moves tracked object in 3d with arrow keys
             if (Input.GetKey(KeyCode.UpArrow))
             {
-                mirrorPos += Vector3.up * Time.deltaTime * haptics.debugMovementSpeed;
+                trackedPos += Vector3.up * Time.deltaTime * haptics.debugMovementSpeed;
             }
             if (Input.GetKey(KeyCode.DownArrow))
             {
-                mirrorPos += Vector3.down * Time.deltaTime * haptics.debugMovementSpeed;
+                trackedPos += Vector3.down * Time.deltaTime * haptics.debugMovementSpeed;
             }
             if (Input.GetKey(KeyCode.LeftArrow))
             {
-                mirrorPos += Vector3.left * Time.deltaTime * haptics.debugMovementSpeed;
+                trackedPos += Vector3.left * Time.deltaTime * haptics.debugMovementSpeed;
             }
             if (Input.GetKey(KeyCode.RightArrow))
             {
-                mirrorPos += Vector3.right * Time.deltaTime * haptics.debugMovementSpeed;
+                trackedPos += Vector3.right * Time.deltaTime * haptics.debugMovementSpeed;
             }
             if (Input.GetKey(KeyCode.W))
             {
-                mirrorPos += Vector3.forward * Time.deltaTime * haptics.debugMovementSpeed;
+                trackedPos += Vector3.forward * Time.deltaTime * haptics.debugMovementSpeed;
             }
             if (Input.GetKey(KeyCode.S))
             {
-                mirrorPos += Vector3.back * Time.deltaTime * haptics.debugMovementSpeed;
+                trackedPos += Vector3.back * Time.deltaTime * haptics.debugMovementSpeed;
             }
-        }
+        }*/
     }
 
-    private void SetForceOnMirror(Vector3 force)
+    private void SetForceOnTracked(Vector3 force)
     {
         lock (dataLock)
         {
-            forceOnMirror = force;
+            forceOnTracked = force;
         }
     }
 
-    public Vector3 GetForceOnMirror()
+    public Vector3 GetForceOnTracked()
     {
         lock (dataLock)
         {
-            return forceOnMirror;
+            return forceOnTracked;
         }
     }
 
-    public void SetMirrorPos(Vector3 pos)
+    public void SetTrackedPos(Vector3 pos)
     {
         lock (dataLock)
         {
-            mirrorPos = pos;
+            trackedPos = pos;
         }
     }
 
-    public Vector3 GetMirrorPos()
+    public Vector3 GetTrackedPos()
     {
         lock (dataLock)
         {
-            return mirrorPos;
+            return trackedPos;
         }
     }
 
-    public void SetMirrorRot(Quaternion rot)
+    public void SetTrackedRot(Quaternion rot)
     {
         lock (dataLock)
         {
-            mirrorRot = rot;
+            trackedRot = rot;
         }
     }
 
-    public Quaternion GetMirrorRot()
+    public Quaternion GetTrackedRot()
     {
         lock (dataLock)
         {
-            return mirrorRot;
+            return trackedRot;
         }
     }
 
     private void UpdateKinematics()
     {
-        // Get the mirror object's velocity and acceleration
-        Vector3 mirrorPosCopy = GetMirrorPos();
-        Vector3 prevMirrorPos = mirrorObject.transform.position;
-        Vector3 currMirrorVel = (mirrorPosCopy - prevMirrorPos) / Time.fixedDeltaTime;
-        mirrorAccel = (currMirrorVel - mirrorVel) / Time.fixedDeltaTime;
-        mirrorObject.transform.position = mirrorPosCopy;
-        mirrorObject.transform.rotation = GetMirrorRot();
-        mirrorVel = currMirrorVel;
+        // Get the tracked object's velocity and acceleration
+        Vector3 trackedPosCopy = trackedTransform.position;
+        Vector3 prevTrackedPos = GetTrackedPos();
+        Vector3 currTrackedVel = (trackedPosCopy - prevTrackedPos) / Time.fixedDeltaTime;
+        trackedAccel = (currTrackedVel - trackedVel) / Time.fixedDeltaTime;
+        SetTrackedPos(trackedPosCopy);
+        SetTrackedRot(trackedTransform.rotation);
+        trackedVel = currTrackedVel;
     }
 
-    private Vector3 ComputeForceOnShadow()
+    private Vector3 ComputeForceOnPhysics()
     {
-        // Gets relative position and velocities of mirror and shadow objects
-        Vector3 mirrorPosCopy = mirrorObject.transform.position;
-        Vector3 shadowPos = gameObject.transform.position;
+        // Gets relative position and velocities of tracked and physics objects
+        Vector3 trackedPosCopy = GetTrackedPos();
+        Vector3 physicsPos = gameObject.transform.position;
 
-        Vector3 shadowVel = shadowRb.linearVelocity;
+        Vector3 physicsVel = physicsAb.linearVelocity;
 
-        Vector3 relPos = shadowPos - mirrorPosCopy;
+        Vector3 relPos = physicsPos - trackedPosCopy;
 
         // Applies coefficients
-        Vector3 force = -(maxStiffness * haptics.stiffness * relPos + maxDamping * haptics.damping * shadowVel);
+        Vector3 force = -(maxStiffness * haptics.stiffness * relPos + maxDamping * haptics.damping * physicsVel);
 
         //Print relative position and calculated force
         //Debug.Log($"Relative position: {relPos}, force: {force}");
@@ -292,23 +292,23 @@ public class HapticNode : MonoBehaviour
         return force;
     }
 
-    private Vector3 ComputeTorqueOnShadow()
+    private Vector3 ComputeTorqueOnPhysics()
     {
         // Get orientations and angular velocities
-        Quaternion mirrorRotCopy = mirrorObject.transform.rotation;
-        Quaternion shadowRot = gameObject.transform.rotation;
+        Quaternion trackedRotCopy = GetTrackedRot();
+        Quaternion physicsRot = gameObject.transform.rotation;
 
-        Vector3 shadowAngVel = shadowRb.angularVelocity;
+        Vector3 physicsAngVel = physicsAb.angularVelocity;
 
-        // Calculate the relative rotation from mirror to shadow in global coordinates
-        Vector3 relRot = AngularVelocityFromQuaternions(mirrorRotCopy, shadowRot, 1);
+        // Calculate the relative rotation from tracked to physics in global coordinates
+        Vector3 relRot = AngularVelocityFromQuaternions(trackedRotCopy, physicsRot, 1);
 
         // Gets maximum stiffness and damping values (would bring object to rest in one frame)
         float maxStiffness = 1 / Mathf.Pow(Time.fixedDeltaTime, 2);
         float maxDamping = 1 / Time.fixedDeltaTime;
 
         // Applies coefficients to get necessary angular acceleration
-        Vector3 angAccel = -(maxStiffness * haptics.stiffness * relRot + maxDamping * haptics.damping * shadowAngVel);
+        Vector3 angAccel = -(maxStiffness * haptics.stiffness * relRot + maxDamping * haptics.damping * physicsAngVel);
         Vector3 axis = angAccel.normalized;
 
         // Finds moment of inertia
@@ -317,7 +317,7 @@ public class HapticNode : MonoBehaviour
         if (axis.magnitude > 0)
         {
             // Gets moment of inertia along the axis of rotation
-            inertia = MomentOfInertiaAlongAxis(shadowRb, axis);
+            inertia = MomentOfInertiaAlongAxis(physicsAb, axis);
         }
         else
         {
@@ -334,17 +334,17 @@ public class HapticNode : MonoBehaviour
 
     private Vector3 GetSpringComponent()
     {
-        //Gets previous mirror and shadow positions
-        Vector3 mirrorPosCopy = mirrorObject.transform.position;
-        Vector3 prevMirrorPos = mirrorPosCopy - mirrorVel * Time.fixedDeltaTime;
-        Vector3 prevShadowPos = gameObject.transform.position - shadowRb.linearVelocity * Time.fixedDeltaTime;
+        //Gets previous tracked and physics positions
+        Vector3 trackedPosCopy = GetTrackedPos();
+        Vector3 prevTrackedPos = trackedPosCopy - trackedVel * Time.fixedDeltaTime;
+        Vector3 prevPhysicsPos = gameObject.transform.position - physicsAb.linearVelocity * Time.fixedDeltaTime;
 
-        //Gets predicted current shadow position and velocity
-        Vector3 predShadowVel = -haptics.stiffness * (prevShadowPos - prevMirrorPos) / Time.fixedDeltaTime + prevShadowVel * (1 - haptics.damping);
-        Vector3 predShadowPos = (prevMirrorPos - prevShadowPos) * haptics.stiffness + prevShadowPos + prevShadowVel * Time.fixedDeltaTime * (1 - haptics.damping);
+        //Gets predicted current physics position and velocity
+        Vector3 predPhysicsVel = -haptics.stiffness * (prevPhysicsPos - prevTrackedPos) / Time.fixedDeltaTime + prevPhysicsVel * (1 - haptics.damping);
+        Vector3 predPhysicsPos = (prevTrackedPos - prevPhysicsPos) * haptics.stiffness + prevPhysicsPos + prevPhysicsVel * Time.fixedDeltaTime * (1 - haptics.damping);
 
         //Gets predicted (inertial) spring force
-        Vector3 predictedForce = -(maxStiffness * haptics.stiffness * (predShadowPos - mirrorPosCopy) + maxDamping * haptics.damping * predShadowVel);
+        Vector3 predictedForce = -(maxStiffness * haptics.stiffness * (predPhysicsPos - trackedPosCopy) + maxDamping * haptics.damping * predPhysicsVel);
 
         return predictedForce;
     }
@@ -361,7 +361,7 @@ public class HapticNode : MonoBehaviour
         currCandidate = new CollisionCandidate(candidate);
     }
 
-    private float MomentOfInertiaAlongAxis(Rigidbody rb, Vector3 axis)
+    private float MomentOfInertiaAlongAxis(ArticulationBody rb, Vector3 axis)
     {
         axis = Quaternion.Inverse(rb.inertiaTensorRotation) * axis.normalized; //rotating the torque because it’s equivalent and more efficient
         Vector3 angularAcceleration = new Vector3(Vector3.Dot(Vector3.right, axis) / rb.inertiaTensor.x, Vector3.Dot(Vector3.up, axis) / rb.inertiaTensor.y, Vector3.Dot(Vector3.forward, axis) / rb.inertiaTensor.z); //calculating the angular acceleration that would result from a torque of 1 Nm (the same way that unity does it)
@@ -413,10 +413,10 @@ public class HapticNode : MonoBehaviour
 
         public static bool FromRaycast(Collider self, Collider other, out CollisionCandidate result)
         {
-            Vector3 selfVelocity = self.attachedRigidbody.linearVelocity;
-            Vector3 otherVelocity = other.attachedRigidbody == null
+            Vector3 selfVelocity = self.attachedArticulationBody.linearVelocity;
+            Vector3 otherVelocity = other.attachedArticulationBody == null
                 ? Vector3.zero
-                : other.attachedRigidbody.linearVelocity;
+                : other.attachedArticulationBody.linearVelocity;
             Vector3 relativeVelocity = selfVelocity - otherVelocity;
 
             if (relativeVelocity.sqrMagnitude <= Mathf.Epsilon)
@@ -436,17 +436,17 @@ public class HapticNode : MonoBehaviour
             float timeUntilCollision = contactToSelf.distance / relativeVelocity.magnitude;
             Vector3 collisionPoint = selfVelocity * timeUntilCollision;
             Vector3 collisionNormal = selfToOther.normal;
-            float selfMass = self.attachedRigidbody.mass;
+            float selfMass = self.attachedArticulationBody.mass;
             Vector3 momentumChange;
 
-            if (other.attachedRigidbody == null)
+            if (other.attachedArticulationBody == null)
             {
                 momentumChange = 2f * selfMass *
                     Vector3.Dot(relativeVelocity, collisionNormal) * collisionNormal;
             }
             else
             {
-                float otherMass = other.attachedRigidbody.mass;
+                float otherMass = other.attachedArticulationBody.mass;
                 float initialSelfVelocity = Vector3.Dot(selfVelocity, collisionNormal);
                 float initialOtherVelocity = Vector3.Dot(otherVelocity, collisionNormal);
                 float finalSelfVelocity =

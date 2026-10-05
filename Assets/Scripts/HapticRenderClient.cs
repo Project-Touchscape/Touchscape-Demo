@@ -79,9 +79,9 @@ public class HapticRenderClient : MonoBehaviour
     async void Start()
     {
         // Set initial gravity state on the haptic node's Rigidbody
-        //var shadowObj = node.shadowObject;
-        //var shadowRb = shadowObj.GetComponent<Rigidbody>();
-        //shadowRb.useGravity = gravity;
+        //var physicsObj = node.physicsObject;
+        //var physicsRb = physicsObj.GetComponent<Rigidbody>();
+        //physicsRb.useGravity = gravity;
         //prevGravity = gravity;
 
         //Handles client setup
@@ -113,7 +113,7 @@ public class HapticRenderClient : MonoBehaviour
                 {
                     client.writeRequest((byte)Headers.FORCE_FEEDBACK);
                     // Send the coverted force vector to the server
-                    client.writeVector3(unityToHardwareForce(node.GetForceOnMirror()));
+                    client.writeVector3(unityToHardwareForce(node.GetForceOnTracked()));
                 }
                 // Send a request to the server for node data
                 client.writeRequest((byte)Headers.SEND_NODE_DATA);
@@ -138,8 +138,8 @@ public class HapticRenderClient : MonoBehaviour
                         Vector3 position = client.readVector3();
                         Quaternion orientation = client.readQuaternion();
                         // Update the node object's position and orientation with converted data
-                        node.SetMirrorPos(hardwareToUnityPos(position));
-                        node.SetMirrorRot(hardwareToUnityRot(orientation));
+                        node.SetTrackedPos(hardwareToUnityPos(position));
+                        node.SetTrackedRot(hardwareToUnityRot(orientation));
                         //Debug.Log($"Received position: {position}, orientation: {orientation}");
                     }
                     else
@@ -194,12 +194,12 @@ public class HapticRenderClient : MonoBehaviour
     void Update()
     {
         // Update gravity state if changed
-        /*if (node != null && node.shadowObject != null)
+        /*if (node != null && node.physicsObject != null)
         {
             if (gravity != prevGravity)
             {
-                var shadowRb = node.shadowObject.GetComponent<Rigidbody>();
-                shadowRb.useGravity = gravity;
+                var physicsRb = node.physicsObject.GetComponent<Rigidbody>();
+                physicsRb.useGravity = gravity;
                 prevGravity = gravity;
             }
         }*/

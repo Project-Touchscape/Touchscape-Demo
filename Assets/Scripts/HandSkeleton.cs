@@ -6,11 +6,13 @@ public class HandSkeleton : MonoBehaviour
     private const int N_FINGERS = 5;
     private const int N_ACTIVE_BONES = 3;
     private XRHand hand;
-    private ArticulationBody   palmBody;
     private BoxCollider        palmCollider;
 
+    public HapticRenderClient haptics;
     public GameObject palm;
+    public Transform trackedPalm;
     public GameObject[] initialFingerJoints = new GameObject[N_FINGERS];
+    public Transform[] trackedJoints = new Transform[N_FINGERS];
 
     [Range(0.1f, 10f)]
     public float strength = 1f;
@@ -42,12 +44,28 @@ public class HandSkeleton : MonoBehaviour
 
     private void ConstructPalm()
     {
-        // Adds articulation body to current body to preserve hierarchy
-        palmBody = gameObject.GetComponent<ArticulationBody>();
+        // Adds root articulation body to current body to preserve hierarchy
+        ArticulationBody rootBody = gameObject.GetComponent<ArticulationBody>();
+        if (rootBody == null)
+        {
+            rootBody = gameObject.AddComponent<ArticulationBody>();
+        }
+
+        rootBody.mass = perBoneMass * 3f;
+        rootBody.immovable = false;
+        rootBody.solverIterations = 60;
+        rootBody.solverVelocityIterations = 20;
+
+        // Adds fixed articulation body to palm object
+        ArticulationBody palmBody = palm.GetComponent<ArticulationBody>();
         if (palmBody == null)
         {
-            palmBody = gameObject.AddComponent<ArticulationBody>();
+            palmBody = palm.AddComponent<ArticulationBody>();
         }
+        palmBody.mass = perBoneMass * 3f;
+        palmBody.solverIterations = 60;
+        palmBody.solverVelocityIterations = 20;
+        palmBody.jointType = ArticulationJointType.FixedJoint;
 
         // Adds collider to palm object
         palmCollider = palm.GetComponent<BoxCollider>();
@@ -60,11 +78,12 @@ public class HandSkeleton : MonoBehaviour
         palmCollider.center = new Vector3(0f, 0.005f, -0.015f);
         palmCollider.size = new Vector3(0.06f, 0.02f, 0.07f);
         palmCollider.material = material;
-        
-        palmBody.mass = perBoneMass * 3f;
-        palmBody.immovable = false;
-        palmBody.solverIterations = 60;
-        palmBody.solverVelocityIterations = 20;
+
+        // Constructs haptic node at palm
+        if (!palm.TryGetComponent<HapticNode>(out var hapticNode))
+            hapticNode = palm.AddComponent<HapticNode>();
+        hapticNode.haptics = haptics;
+        hapticNode.trackedTransform = trackedPalm;
     }
 
     private void ConstructFingers()
@@ -86,6 +105,9 @@ public class HandSkeleton : MonoBehaviour
                 ConstructFingerJoint(currentJoint, nextJoint);
                 currentJoint = nextJoint;
             }
+
+            // Constructs haptic node at fingertip
+            ConstructHapticNode(fingerIndex, currentJoint);
         }
     }
 
@@ -100,8 +122,7 @@ public class HandSkeleton : MonoBehaviour
     private void ConstructFingerJoint(GameObject currentJoint, GameObject nextJoint)
     {
         // Components belong to the existing tracked joint object. No proxy GameObject is needed.
-        ArticulationBody body = currentJoint.GetComponent<ArticulationBody>();
-        if (body == null)
+        if (!currentJoint.TryGetComponent<ArticulationBody>(out var body))
             body = currentJoint.AddComponent<ArticulationBody>();
 
         CapsuleCollider capsule = currentJoint.GetComponent<CapsuleCollider>();
@@ -133,5 +154,27 @@ public class HandSkeleton : MonoBehaviour
             lowerLimit = -10f,
             upperLimit = 89f
         };
+    }
+
+    private void ConstructHapticNode(int fingerIndex, GameObject fingertipJoint)
+    {
+        if (fingertipJoint == null)
+            return;
+
+        // Create ArticulatedBody for fingertip joint if it doesn't exist
+        if (!fingertipJoint.TryGetComponent<ArticulationBody>(out var ab))
+            ab = fingertipJoint.AddComponent<ArticulationBody>();
+        
+        ab.mass = perBoneMass;
+        ab.jointType = ArticulationJointType.FixedJoint;
+        ab.solverIterations = 60;
+        ab.solverVelocityIterations = 20;
+
+        // Create haptic node
+        if (!fingertipJoint.TryGetComponent<HapticNode>(out var hapticNode))
+            hapticNode = fingertipJoint.AddComponent<HapticNode>();
+
+        hapticNode.haptics = haptics;
+        hapticNode.trackedTransform = trackedJoints[fingerIndex];
     }
 }
