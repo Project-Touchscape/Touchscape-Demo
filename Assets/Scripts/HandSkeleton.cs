@@ -1,13 +1,9 @@
 using UnityEngine;
 using UnityEngine.XR.Hands;
+using System.Collections.Generic;
 
 public class HandSkeleton : MonoBehaviour
 {
-    private const int N_FINGERS = 5;
-    private const int N_ACTIVE_BONES = 3;
-    private XRHand hand;
-    private BoxCollider        palmCollider;
-
     public HapticRenderClient haptics;
     public GameObject palm;
     public Transform trackedPalm;
@@ -29,8 +25,19 @@ public class HandSkeleton : MonoBehaviour
     [Tooltip("The physics material that the hand uses.")]
     public PhysicsMaterial material = null;
 
+    public bool useGravity = false;
+
+    // Cache previous gravity state to detect changes
+    private bool prevGravity = false;
+    private const int N_FINGERS = 5;
+    private const int N_ACTIVE_BONES = 3;
+    private XRHand hand;
+    private List<ArticulationBody> articulationBodies = new List<ArticulationBody>();
+
     void Start()
     {
+        // Set initial gravity state
+        prevGravity = useGravity;
         // Initialize palm articulation body and collider
         ConstructPalm();
         ConstructFingers();
@@ -38,8 +45,19 @@ public class HandSkeleton : MonoBehaviour
 
     void Update()
     {
-        if (hand == null)
-            return;
+        // Check if the gravity state has changed
+        if (prevGravity != useGravity)
+        {
+            prevGravity = useGravity;
+            // Update the gravity state of the hand
+            foreach (var body in articulationBodies)
+            {
+                if (body != null)
+                {
+                    body.useGravity = useGravity;
+                }
+            }
+        }
     }
 
     private void ConstructPalm()
@@ -53,8 +71,10 @@ public class HandSkeleton : MonoBehaviour
 
         rootBody.mass = perBoneMass * 3f;
         rootBody.immovable = false;
+        rootBody.useGravity = useGravity;
         rootBody.solverIterations = 60;
         rootBody.solverVelocityIterations = 20;
+        articulationBodies.Add(rootBody);
 
         // Adds fixed articulation body to palm object
         ArticulationBody palmBody = palm.GetComponent<ArticulationBody>();
@@ -63,20 +83,37 @@ public class HandSkeleton : MonoBehaviour
             palmBody = palm.AddComponent<ArticulationBody>();
         }
         palmBody.mass = perBoneMass * 3f;
+        palmBody.useGravity = useGravity;
         palmBody.solverIterations = 60;
         palmBody.solverVelocityIterations = 20;
         palmBody.jointType = ArticulationJointType.FixedJoint;
+        articulationBodies.Add(palmBody);
 
-        // Adds collider to palm object
-        palmCollider = palm.GetComponent<BoxCollider>();
-        if (palmCollider == null)
+        // Reuse the first child as the palm collider object, creating one when the palm
+        // does not already have a child. The collider must not be added to the palm root,
+        // because the root owns the articulation joint.
+        GameObject palmChild;
+        if (palm.transform.childCount > 0)
         {
-            palmCollider = palm.AddComponent<BoxCollider>();
+            palmChild = palm.transform.GetChild(0).gameObject;
+        }
+        else
+        {
+            palmChild = new GameObject(palm.name + " Collider");
+            palmChild.transform.SetParent(palm.transform, false);
+            palmChild.layer = palm.layer;
         }
 
-        // Palm properties: mass, collider size, and physics material
-        palmCollider.center = new Vector3(0f, 0.005f, -0.015f);
-        palmCollider.size = new Vector3(0.06f, 0.02f, 0.07f);
+        BoxCollider palmCollider = palmChild.GetComponent<BoxCollider>();
+        if (palmCollider == null)
+        {
+            palmCollider = palmChild.AddComponent<BoxCollider>();
+            palmCollider.center = new Vector3(0f, 0.005f, -0.015f);
+            palmCollider.size = new Vector3(0.06f, 0.02f, 0.07f);
+        }
+
+        // Always apply the configured hand material, including when the collider
+        // was already present on the child.
         palmCollider.material = material;
 
         // Constructs haptic node at palm
@@ -140,6 +177,7 @@ public class HandSkeleton : MonoBehaviour
         capsule.material = material;
 
         body.mass = perBoneMass;
+        body.useGravity = useGravity;
         body.anchorPosition = Vector3.zero;
         body.anchorRotation = Quaternion.identity;
         body.solverIterations = 60;
@@ -154,6 +192,7 @@ public class HandSkeleton : MonoBehaviour
             lowerLimit = -10f,
             upperLimit = 89f
         };
+        articulationBodies.Add(body);
     }
 
     private void ConstructHapticNode(int fingerIndex, GameObject fingertipJoint)
@@ -166,9 +205,11 @@ public class HandSkeleton : MonoBehaviour
             ab = fingertipJoint.AddComponent<ArticulationBody>();
         
         ab.mass = perBoneMass;
+        ab.useGravity = useGravity;
         ab.jointType = ArticulationJointType.FixedJoint;
         ab.solverIterations = 60;
         ab.solverVelocityIterations = 20;
+        articulationBodies.Add(ab);
 
         // Create haptic node
         if (!fingertipJoint.TryGetComponent<HapticNode>(out var hapticNode))

@@ -21,14 +21,15 @@ public class HapticRenderClient : MonoBehaviour
     public bool collisionFeedback = true;
 
     // Whether inertia is enabled
-    public bool inertia = false;
+    public bool useInertia = false;
 
-    // Checkbox for enabling gravity on the haptic node's rigidbody
-    public bool gravity = false;
+    // Stiffness and damping coefficients for position
+    public float posStiffness = 1f;
+    public float posDamping = 1f;
 
-    // Stiffness and damping coefficients
-    public float stiffness = 1f;
-    public float damping = 1f;
+    // Stiffness and damping coefficients for rotation
+    public float rotStiffness = 0f;
+    public float rotDamping = 0f;
 
     //Minimum force
     public float minForce = 0.01f;
@@ -72,18 +73,9 @@ public class HapticRenderClient : MonoBehaviour
     // Haptic node script attached to node object
     private HapticNode node;
 
-    // Cache previous gravity state
-    private bool prevGravity;
-
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     async void Start()
     {
-        // Set initial gravity state on the haptic node's Rigidbody
-        //var physicsObj = node.physicsObject;
-        //var physicsRb = physicsObj.GetComponent<Rigidbody>();
-        //physicsRb.useGravity = gravity;
-        //prevGravity = gravity;
-
         //Handles client setup
         client = new MinBiTTcpClient();
         // Sets endianness and send mode
@@ -193,16 +185,6 @@ public class HapticRenderClient : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        // Update gravity state if changed
-        /*if (node != null && node.physicsObject != null)
-        {
-            if (gravity != prevGravity)
-            {
-                var physicsRb = node.physicsObject.GetComponent<Rigidbody>();
-                physicsRb.useGravity = gravity;
-                prevGravity = gravity;
-            }
-        }*/
     }
 
     private Vector3 hardwareToUnityForce(Vector3 force)

@@ -111,7 +111,7 @@ public class HapticNode : MonoBehaviour
         force += GetSpringComponent();
 
         // If inertia is enabled, adds inertial force to the tracked
-        if (haptics.inertia)
+        if (haptics.useInertia)
         {
             // Gets inertial force on tracked object
             Vector3 inertialForce = - physicsAb.mass * trackedAccel / Time.fixedDeltaTime;
@@ -177,7 +177,6 @@ public class HapticNode : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        
     }
 
     private void UpdateDebugMovement()
@@ -275,6 +274,10 @@ public class HapticNode : MonoBehaviour
 
     private Vector3 ComputeForceOnPhysics()
     {
+        if (haptics.posStiffness == 0 && haptics.posDamping == 0)
+        {
+            return Vector3.zero;
+        }
         // Gets relative position and velocities of tracked and physics objects
         Vector3 trackedPosCopy = GetTrackedPos();
         Vector3 physicsPos = gameObject.transform.position;
@@ -284,7 +287,7 @@ public class HapticNode : MonoBehaviour
         Vector3 relPos = physicsPos - trackedPosCopy;
 
         // Applies coefficients
-        Vector3 force = -(maxStiffness * haptics.stiffness * relPos + maxDamping * haptics.damping * physicsVel);
+        Vector3 force = -(maxStiffness * haptics.posStiffness * relPos + maxDamping * haptics.posDamping * physicsVel);
 
         //Print relative position and calculated force
         //Debug.Log($"Relative position: {relPos}, force: {force}");
@@ -294,6 +297,10 @@ public class HapticNode : MonoBehaviour
 
     private Vector3 ComputeTorqueOnPhysics()
     {
+        if (haptics.rotStiffness == 0 && haptics.rotDamping == 0)
+        {
+            return Vector3.zero;
+        }
         // Get orientations and angular velocities
         Quaternion trackedRotCopy = GetTrackedRot();
         Quaternion physicsRot = gameObject.transform.rotation;
@@ -308,7 +315,7 @@ public class HapticNode : MonoBehaviour
         float maxDamping = 1 / Time.fixedDeltaTime;
 
         // Applies coefficients to get necessary angular acceleration
-        Vector3 angAccel = -(maxStiffness * haptics.stiffness * relRot + maxDamping * haptics.damping * physicsAngVel);
+        Vector3 angAccel = -(maxStiffness * haptics.rotStiffness * relRot + maxDamping * haptics.rotDamping * physicsAngVel);
         Vector3 axis = angAccel.normalized;
 
         // Finds moment of inertia
@@ -334,17 +341,21 @@ public class HapticNode : MonoBehaviour
 
     private Vector3 GetSpringComponent()
     {
+        if (haptics.posStiffness == 0 && haptics.posDamping == 0)
+        {
+            return Vector3.zero;
+        }
         //Gets previous tracked and physics positions
         Vector3 trackedPosCopy = GetTrackedPos();
         Vector3 prevTrackedPos = trackedPosCopy - trackedVel * Time.fixedDeltaTime;
         Vector3 prevPhysicsPos = gameObject.transform.position - physicsAb.linearVelocity * Time.fixedDeltaTime;
 
         //Gets predicted current physics position and velocity
-        Vector3 predPhysicsVel = -haptics.stiffness * (prevPhysicsPos - prevTrackedPos) / Time.fixedDeltaTime + prevPhysicsVel * (1 - haptics.damping);
-        Vector3 predPhysicsPos = (prevTrackedPos - prevPhysicsPos) * haptics.stiffness + prevPhysicsPos + prevPhysicsVel * Time.fixedDeltaTime * (1 - haptics.damping);
+        Vector3 predPhysicsVel = -haptics.posStiffness * (prevPhysicsPos - prevTrackedPos) / Time.fixedDeltaTime + prevPhysicsVel * (1 - haptics.posDamping);
+        Vector3 predPhysicsPos = (prevTrackedPos - prevPhysicsPos) * haptics.posStiffness + prevPhysicsPos + prevPhysicsVel * Time.fixedDeltaTime * (1 - haptics.posDamping);
 
         //Gets predicted (inertial) spring force
-        Vector3 predictedForce = -(maxStiffness * haptics.stiffness * (predPhysicsPos - trackedPosCopy) + maxDamping * haptics.damping * predPhysicsVel);
+        Vector3 predictedForce = -(maxStiffness * haptics.posStiffness * (predPhysicsPos - trackedPosCopy) + maxDamping * haptics.posDamping * predPhysicsVel);
 
         return predictedForce;
     }
