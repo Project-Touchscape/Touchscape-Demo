@@ -58,9 +58,9 @@ public class HapticNode : MonoBehaviour
         // Gets physics object rigidbody
         physicsAb = gameObject.GetComponent<ArticulationBody>();
         physicsCollider = gameObject.GetComponent<Collider>();
-        // Gets maximum stiffness and damping values (would bring object to rest in one frame)
-        maxStiffness = physicsAb.mass / Mathf.Pow(Time.fixedDeltaTime, 2);
-        maxDamping = physicsAb.mass / Time.fixedDeltaTime;
+        // Gets maximum stiffness and damping coefficients (would bring object to rest in one frame)
+        maxStiffness = 1 / Mathf.Pow(Time.fixedDeltaTime, 2);
+        maxDamping = 1 / Time.fixedDeltaTime;
 
         // Visuals start off
         //forceVisual.SetActive(false);
@@ -287,8 +287,8 @@ public class HapticNode : MonoBehaviour
         Vector3 relPos = physicsPos - trackedPosCopy;
 
         // Applies coefficients
-        Vector3 force = -(maxStiffness * haptics.posStiffness * relPos + maxDamping * haptics.posDamping * physicsVel);
-
+        Vector3 accel = -(maxStiffness * haptics.posStiffness * relPos + maxDamping * haptics.posDamping * physicsVel);
+        Vector3 force = physicsAb.mass * accel;
         //Print relative position and calculated force
         //Debug.Log($"Relative position: {relPos}, force: {force}");
 
@@ -309,10 +309,6 @@ public class HapticNode : MonoBehaviour
 
         // Calculate the relative rotation from tracked to physics in global coordinates
         Vector3 relRot = AngularVelocityFromQuaternions(trackedRotCopy, physicsRot, 1);
-
-        // Gets maximum stiffness and damping values (would bring object to rest in one frame)
-        float maxStiffness = 1 / Mathf.Pow(Time.fixedDeltaTime, 2);
-        float maxDamping = 1 / Time.fixedDeltaTime;
 
         // Applies coefficients to get necessary angular acceleration
         Vector3 angAccel = -(maxStiffness * haptics.rotStiffness * relRot + maxDamping * haptics.rotDamping * physicsAngVel);
@@ -355,8 +351,8 @@ public class HapticNode : MonoBehaviour
         Vector3 predPhysicsPos = (prevTrackedPos - prevPhysicsPos) * haptics.posStiffness + prevPhysicsPos + prevPhysicsVel * Time.fixedDeltaTime * (1 - haptics.posDamping);
 
         //Gets predicted (inertial) spring force
-        Vector3 predictedForce = -(maxStiffness * haptics.posStiffness * (predPhysicsPos - trackedPosCopy) + maxDamping * haptics.posDamping * predPhysicsVel);
-
+        Vector3 predictedAccel = -(maxStiffness * haptics.posStiffness * (predPhysicsPos - trackedPosCopy) + maxDamping * haptics.posDamping * predPhysicsVel);
+        Vector3 predictedForce = physicsAb.mass * predictedAccel;
         return predictedForce;
     }
 

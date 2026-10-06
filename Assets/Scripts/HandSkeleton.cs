@@ -13,9 +13,6 @@ public class HandSkeleton : MonoBehaviour
     public GameObject[] initialFingerJoints = new GameObject[N_FINGERS];
     public Transform[] trackedJoints = new Transform[N_FINGERS];
 
-    [Range(0.1f, 10f)]
-    public float strength = 1f;
-
     [SerializeField]
     [Tooltip("The mass of each finger bone; the palm will be 3x this.")]
     public float perBoneMass = 3.0f;
@@ -31,6 +28,9 @@ public class HandSkeleton : MonoBehaviour
 
     // Cache previous gravity state to detect changes
     private bool prevGravity = false;
+
+    private float maxStiffness;
+    private float maxDamping;
     private XRHand hand;
     private List<ArticulationBody> articulationBodies = new List<ArticulationBody>();
 
@@ -38,6 +38,9 @@ public class HandSkeleton : MonoBehaviour
     {
         // Set initial gravity state
         prevGravity = useGravity;
+        // Sets max stiffness and damping coefficients (would bring object to rest in one frame)
+        maxStiffness = 1 / Mathf.Pow(Time.fixedDeltaTime, 2);
+        maxDamping = 1 / Time.fixedDeltaTime;
         // Initialize palm articulation body and collider
         ConstructPalm();
         ConstructFingers();
@@ -212,9 +215,9 @@ public class HandSkeleton : MonoBehaviour
         body.twistLock = ArticulationDofLock.FreeMotion;
         body.xDrive = new ArticulationDrive
         {
-            stiffness = 100f * strength,
-            forceLimit = 1000f * strength,
-            damping = 3f,
+            stiffness = 1 * maxStiffness,
+            forceLimit = 1000f,
+            damping = 1 * maxDamping,
             lowerLimit = -10f,
             upperLimit = 89f
         };
