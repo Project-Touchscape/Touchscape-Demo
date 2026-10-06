@@ -215,9 +215,9 @@ public class HandSkeleton : MonoBehaviour
         body.twistLock = ArticulationDofLock.LimitedMotion;
         body.xDrive = new ArticulationDrive
         {
-            stiffness = maxStiffness,
+            stiffness = 0,
             forceLimit = 1000f,
-            damping = maxDamping,
+            damping = 0,
             lowerLimit = -10f,
             upperLimit = 89f
         };

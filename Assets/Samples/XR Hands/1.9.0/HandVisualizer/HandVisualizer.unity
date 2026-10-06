@@ -703,8 +703,8 @@ MonoBehaviour:
   useInertia: 0
   posStiffness: 1
   posDamping: 1
-  rotStiffness: 0
-  rotDamping: 0
+  rotStiffness: 1
+  rotDamping: 1
   minForce: 0.01
   visualization: 0
   forceVisualScale: 100
@@ -800,8 +800,6 @@ MonoBehaviour:
   - {fileID: 682907665}
   - {fileID: 2026390595}
   - {fileID: 1422600271}
-  strength: 1
-  perBoneMass: 3
   fingerBoneWidths:
   - 0.02
   - 0.018
@@ -810,6 +808,8 @@ MonoBehaviour:
   - 0.025
   - 0.023
   - 0.021
+  perBoneMass: 3
+  palmMass: 0.3
   material: {fileID: 13400000, guid: 79f32ab1ddb2e964fbf9bbc1fa6ada07, type: 2}
   useGravity: 0
 --- !u!1001 &1355625227
