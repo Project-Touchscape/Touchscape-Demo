@@ -12,13 +12,13 @@ public class HandSkeleton : MonoBehaviour
     public Transform trackedPalm;
     public GameObject[] initialFingerJoints = new GameObject[N_FINGERS];
     public Transform[] trackedJoints = new Transform[N_FINGERS];
-
-    [SerializeField]
-    [Tooltip("The mass of each finger bone; the palm will be 3x this.")]
-    public float perBoneMass = 3.0f;
-
     public float[] fingerBoneWidths = new float[3] {0.016f, 0.016f, 0.016f};
     public float[] thumbBoneWidths = new float[3] {0.016f, 0.016f, 0.016f};
+
+    [SerializeField]
+    [Tooltip("The mass of each finger bone")]
+    public float perBoneMass = 0.1f;
+    public float palmMass = 0.3f;
 
     [SerializeField]
     [Tooltip("The physics material that the hand uses.")]
@@ -72,7 +72,7 @@ public class HandSkeleton : MonoBehaviour
             rootBody = gameObject.AddComponent<ArticulationBody>();
         }
 
-        rootBody.mass = perBoneMass * 3f;
+        rootBody.mass = palmMass;
         rootBody.immovable = false;
         rootBody.useGravity = useGravity;
         rootBody.solverIterations = 60;
