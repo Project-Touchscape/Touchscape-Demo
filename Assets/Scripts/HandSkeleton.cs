@@ -212,12 +212,12 @@ public class HandSkeleton : MonoBehaviour
         body.solverIterations = 60;
         body.solverVelocityIterations = 20;
         body.jointType = ArticulationJointType.RevoluteJoint;
-        body.twistLock = ArticulationDofLock.FreeMotion;
+        body.twistLock = ArticulationDofLock.LimitedMotion;
         body.xDrive = new ArticulationDrive
         {
-            stiffness = 1 * maxStiffness,
+            stiffness = maxStiffness,
             forceLimit = 1000f,
-            damping = 1 * maxDamping,
+            damping = maxDamping,
             lowerLimit = -10f,
             upperLimit = 89f
         };
