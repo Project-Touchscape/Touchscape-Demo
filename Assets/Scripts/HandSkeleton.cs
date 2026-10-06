@@ -4,6 +4,9 @@ using System.Collections.Generic;
 
 public class HandSkeleton : MonoBehaviour
 {
+    private const int N_FINGERS = 5;
+    private const int N_ACTIVE_BONES = 3;
+
     public HapticRenderClient haptics;
     public GameObject palm;
     public Transform trackedPalm;
@@ -17,9 +20,8 @@ public class HandSkeleton : MonoBehaviour
     [Tooltip("The mass of each finger bone; the palm will be 3x this.")]
     public float perBoneMass = 3.0f;
 
-    [SerializeField]
-    [Tooltip("The width of each finger bone.")]
-    public float boneWidth = 0.016f;
+    public float[] fingerBoneWidths = new float[3] {0.016f, 0.016f, 0.016f};
+    public float[] thumbBoneWidths = new float[3] {0.016f, 0.016f, 0.016f};
 
     [SerializeField]
     [Tooltip("The physics material that the hand uses.")]
@@ -29,8 +31,6 @@ public class HandSkeleton : MonoBehaviour
 
     // Cache previous gravity state to detect changes
     private bool prevGravity = false;
-    private const int N_FINGERS = 5;
-    private const int N_ACTIVE_BONES = 3;
     private XRHand hand;
     private List<ArticulationBody> articulationBodies = new List<ArticulationBody>();
 
@@ -139,7 +139,7 @@ public class HandSkeleton : MonoBehaviour
                     break;
 
                 GameObject nextJoint = GetNextJoint(currentJoint);
-                ConstructFingerJoint(currentJoint, nextJoint);
+                ConstructFingerJoint(fingerIndex, jointIndex, currentJoint, nextJoint);
                 currentJoint = nextJoint;
             }
 
@@ -156,20 +156,46 @@ public class HandSkeleton : MonoBehaviour
         return currentJoint.transform.GetChild(0).gameObject;
     }
 
-    private void ConstructFingerJoint(GameObject currentJoint, GameObject nextJoint)
+    private void ConstructFingerJoint(int fingerIndex, int jointIndex, GameObject currentJoint, GameObject nextJoint)
     {
-        // Components belong to the existing tracked joint object. No proxy GameObject is needed.
+        // Keep the articulation body on the tracked joint object.
         if (!currentJoint.TryGetComponent<ArticulationBody>(out var body))
             body = currentJoint.AddComponent<ArticulationBody>();
 
-        CapsuleCollider capsule = currentJoint.GetComponent<CapsuleCollider>();
+        // Put the collider on a child so its rotation can be set independently of the
+        // tracked joint's parent orientation.
+        const string colliderName = "Finger Collider";
+        Transform colliderTransform = currentJoint.transform.Find(colliderName);
+        if (colliderTransform == null)
+        {
+            GameObject colliderObject = new GameObject(colliderName);
+            colliderTransform = colliderObject.transform;
+            colliderTransform.SetParent(currentJoint.transform, false);
+        }
+
+        // Points child object z-axis in the direction of the next joint, or forward if there is no next joint.
+        colliderTransform.localPosition = Vector3.zero;
+        Vector3 boneDirection = nextJoint == null
+            ? currentJoint.transform.forward
+            : nextJoint.transform.position - currentJoint.transform.position;
+        if (boneDirection.sqrMagnitude > Mathf.Epsilon)
+            colliderTransform.rotation = Quaternion.LookRotation(boneDirection.normalized, currentJoint.transform.up);
+
+        // Adds capsule collider to the child object
+        CapsuleCollider capsule = colliderTransform.GetComponent<CapsuleCollider>();
         if (capsule == null)
-            capsule = currentJoint.AddComponent<CapsuleCollider>();
+            capsule = colliderTransform.gameObject.AddComponent<CapsuleCollider>();
+        
+        // Gets bone width by per joint specifcations
+        float boneWidth = fingerIndex == N_FINGERS-1 ? thumbBoneWidths[jointIndex] : fingerBoneWidths[jointIndex];
 
-        float boneLength = nextJoint == null
-            ? 0.02f
-            : Vector3.Distance(currentJoint.transform.position, nextJoint.transform.position);
-
+        // Gets bone length from distance to the next joint
+        float boneLength = nextJoint == null ? 0.02f : Vector3.Distance(currentJoint.transform.position, nextJoint.transform.position);
+        
+        // Shortens the bone length for the last joint to be tangent to the fingertip
+        if (jointIndex == N_ACTIVE_BONES - 1)
+            boneLength -= boneWidth * 0.5f;
+        
         capsule.direction = 2;
         capsule.radius = boneWidth * 0.5f;
         capsule.height = boneLength + boneWidth;

@@ -24,11 +24,15 @@ public class HapticRenderClient : MonoBehaviour
     public bool useInertia = false;
 
     // Stiffness and damping coefficients for position
+    [Range(0f, 1f)]
     public float posStiffness = 1f;
+    [Range(0f, 1f)]
     public float posDamping = 1f;
 
     // Stiffness and damping coefficients for rotation
+    [Range(0f, 1f)]
     public float rotStiffness = 0f;
+    [Range(0f, 1f)]
     public float rotDamping = 0f;
 
     //Minimum force
