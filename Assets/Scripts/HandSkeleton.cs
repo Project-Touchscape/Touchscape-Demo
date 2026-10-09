@@ -85,33 +85,14 @@ public class HandSkeleton : MonoBehaviour
                 if (jointDOF > 0)
                 {
                     // Update the articulation body's target angle based on the tracked joint's rotation
-                    UpdateJointTarget(jointID, currentJoint, trackedJoint);
+                    UpdateJointTarget(jointID, jointIndex, currentJoint, trackedJoint);
                 }
 
                 // Move to the next joint in the finger hierarchy
-                currentJoint = GetChildJoint(currentJoint);
-                trackedJoint = GetChildTransform(trackedJoint);
+                currentJoint = currentJoint.transform.GetChild(0).gameObject;
+                trackedJoint = trackedJoint.GetChild(0);
                 jointID++;
             }
-        }
-    }
-
-    private void UpdateJointTarget(int jointID, GameObject currentJoint, Transform trackedJoint)
-    {
-        if (currentJoint == null || trackedJoint == null)
-            return;
-
-        ArticulationBody body = currentJoint.GetComponent<ArticulationBody>();
-        if (body != null && body.jointType == ArticulationJointType.RevoluteJoint)
-        {
-            float initialAngle = initialJointAngles[jointID];
-            float currentAngle = Vector3.SignedAngle(trackedJoint.parent.forward, trackedJoint.forward, trackedJoint.right);
-            float targetAngle = currentAngle - initialAngle;
-            var drive = body.xDrive;
-            drive.target = targetAngle;
-            drive.stiffness = fingerStiffness;
-            drive.damping = fingerDamping;
-            body.xDrive = drive;
         }
     }
 
@@ -194,30 +175,13 @@ public class HandSkeleton : MonoBehaviour
                 if (currentJoint == null)
                     break;
 
-                GameObject nextJoint = GetChildJoint(currentJoint);
-                ConstructFingerJoint(fingerIndex, jointIndex, currentJoint, nextJoint);
-                currentJoint = nextJoint;
+                ConstructFingerJoint(fingerIndex, jointIndex, currentJoint);
+                currentJoint = currentJoint.transform.GetChild(0).gameObject;
             }
         }
     }
 
-    private GameObject GetChildJoint(GameObject currentJoint)
-    {
-        if (currentJoint == null || currentJoint.transform.childCount == 0)
-            return null;
-
-        return currentJoint.transform.GetChild(0).gameObject;
-    }
-
-    private Transform GetChildTransform(Transform currentTransform)
-    {
-        if (currentTransform == null || currentTransform.childCount == 0)
-            return null;
-
-        return currentTransform.GetChild(0);
-    }
-
-    private void ConstructFingerJoint(int fingerIndex, int jointIndex, GameObject currentJoint, GameObject nextJoint)
+    private void ConstructFingerJoint(int fingerIndex, int jointIndex, GameObject currentJoint)
     {
         // Fetch per joint properties
         bool isThumb = fingerIndex == N_FINGERS - 1;
@@ -226,6 +190,9 @@ public class HandSkeleton : MonoBehaviour
         int effectiveIndex = isThumb ? jointIndex + 1 : jointIndex;
         bool useCollider = jointsWithColliders[effectiveIndex];
         int dof = perJointDOF[effectiveIndex];
+
+        // Gets the direction of the bone from the current joint to the next joint
+        Vector3 boneDirection = GetBoneVector(currentJoint.transform);
 
         if (useCollider) {
             // Put the collider on a child so its rotation can be set independently of the
@@ -241,9 +208,6 @@ public class HandSkeleton : MonoBehaviour
 
             // Points child object z-axis in the direction of the next joint, or forward if there is no next joint.
             colliderTransform.localPosition = Vector3.zero;
-            Vector3 boneDirection = nextJoint == null
-                ? currentJoint.transform.forward
-                : nextJoint.transform.position - currentJoint.transform.position;
             if (boneDirection.sqrMagnitude > Mathf.Epsilon)
                 colliderTransform.rotation = Quaternion.LookRotation(boneDirection.normalized, currentJoint.transform.up);
 
@@ -253,7 +217,7 @@ public class HandSkeleton : MonoBehaviour
                 capsule = colliderTransform.gameObject.AddComponent<CapsuleCollider>();
 
             // Gets bone length from distance to the next joint
-            float boneLength = nextJoint == null ? 0.02f : Vector3.Distance(currentJoint.transform.position, nextJoint.transform.position);
+            float boneLength = boneDirection.magnitude;
             
             // Shortens the bone length for the last joint to be tangent to the fingertip
             if (jointIndex == N_ACTIVE_BONES - 1)
@@ -270,13 +234,12 @@ public class HandSkeleton : MonoBehaviour
         if (!currentJoint.TryGetComponent<ArticulationBody>(out var body))
             body = currentJoint.AddComponent<ArticulationBody>();
 
-        // Gets initial joint angle using current joint orientation relative to parent joint orientation (X-axis rotation)
+        // Gets initial joint angle using current bone direction relative to parent bone direction (X-axis rotation)
         float initialAngle = 0f;
-        if (jointIndex > 0 && currentJoint.transform.parent != null)
+        if (effectiveIndex > 0 && currentJoint.transform.parent != null)
         {
-            Vector3 parentForward = currentJoint.transform.parent.forward;
-            Vector3 currentForward = currentJoint.transform.forward;
-            initialAngle = Vector3.SignedAngle(parentForward, currentForward, currentJoint.transform.right);
+            Vector3 parentBoneDirection = GetBoneVector(currentJoint.transform.parent);
+            initialAngle = Vector3.SignedAngle(parentBoneDirection, boneDirection, currentJoint.transform.right);
         }
         initialJointAngles.Add(initialAngle);
 
@@ -306,5 +269,49 @@ public class HandSkeleton : MonoBehaviour
             body.jointType = ArticulationJointType.FixedJoint;
         }
         articulationBodies.Add(body);
+    }
+
+    /// <summary>
+    /// Gets the direction of the bone from the current joint to the next joint.
+    /// </summary>
+    /// <param name="currentJoint">The current joint.</param>
+    /// <returns>The direction of the bone.</returns>
+    private Vector3 GetBoneVector(Transform currentJoint)
+    {
+        Transform nextJoint = currentJoint.childCount > 0 ? currentJoint.GetChild(0) : null;
+        if (nextJoint == null)
+            return currentJoint.forward;
+
+        return nextJoint.position - currentJoint.position;
+    }
+
+    /// <summary>
+    /// Updates the target angle of a joint based on the tracked joint's position.
+    /// </summary>
+    /// <param name="jointID">The ID of the joint to update.</param>
+    /// <param name="jointIndex">The index of the joint to update.</param>
+    /// <param name="currentJoint">The current joint.</param>
+    /// <param name="trackedJoint">The tracked joint.</param>
+    private void UpdateJointTarget(int jointID, int jointIndex, GameObject currentJoint, Transform trackedJoint)
+    {
+        if (currentJoint == null || trackedJoint == null)
+            return;
+
+        ArticulationBody body = currentJoint.GetComponent<ArticulationBody>();
+        if (body != null && body.jointType == ArticulationJointType.RevoluteJoint)
+        {
+            // Calculate the target angle based on the tracked joint's bone direction relative to its parent orientation
+            float initialAngle = initialJointAngles[jointID];
+            Vector3 trackedBoneDirection = GetBoneVector(trackedJoint);
+            Vector3 parentBoneDirection = GetBoneVector(trackedJoint.parent);
+            float currentAngle = Vector3.SignedAngle(parentBoneDirection, trackedBoneDirection, trackedJoint.right);
+            float targetAngle = currentAngle - initialAngle;
+            var drive = body.xDrive;
+            drive.target = targetAngle;
+            // Update stiffness and damping in case they have changed
+            drive.stiffness = fingerStiffness;
+            drive.damping = fingerDamping;
+            body.xDrive = drive;
+        }
     }
 }
