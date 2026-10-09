@@ -142,9 +142,6 @@ public class HandSkeleton : MonoBehaviour
                 ConstructFingerJoint(fingerIndex, jointIndex, currentJoint, nextJoint);
                 currentJoint = nextJoint;
             }
-
-            // Constructs haptic node at fingertip
-            //ConstructHapticNode(fingerIndex, currentJoint);
         }
     }
 
@@ -212,36 +209,12 @@ public class HandSkeleton : MonoBehaviour
         body.twistLock = ArticulationDofLock.LimitedMotion;
         body.xDrive = new ArticulationDrive
         {
-            stiffness = 0,
+            stiffness = 1000f,
             forceLimit = 1000f,
-            damping = 0,
+            damping = 100f,
             lowerLimit = -10f,
             upperLimit = 89f
         };
         articulationBodies.Add(body);
-    }
-
-    private void ConstructHapticNode(int fingerIndex, GameObject fingertipJoint)
-    {
-        if (fingertipJoint == null)
-            return;
-
-        // Create ArticulatedBody for fingertip joint if it doesn't exist
-        if (!fingertipJoint.TryGetComponent<ArticulationBody>(out var ab))
-            ab = fingertipJoint.AddComponent<ArticulationBody>();
-        
-        ab.mass = perBoneMass;
-        ab.useGravity = useGravity;
-        ab.jointType = ArticulationJointType.FixedJoint;
-        ab.solverIterations = 60;
-        ab.solverVelocityIterations = 20;
-        articulationBodies.Add(ab);
-
-        // Create haptic node
-        if (!fingertipJoint.TryGetComponent<HapticNode>(out var hapticNode))
-            hapticNode = fingertipJoint.AddComponent<HapticNode>();
-
-        hapticNode.haptics = haptics;
-        hapticNode.trackedTransform = trackedJoints[fingerIndex];
     }
 }
