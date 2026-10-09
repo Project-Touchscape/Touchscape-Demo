@@ -25,6 +25,8 @@ public class HandSkeleton : MonoBehaviour
     public PhysicsMaterial material = null;
 
     public bool useGravity = false;
+    public float fingerStiffness = 1000f;
+    public float fingerDamping = 100f;
 
     // Cache previous gravity state to detect changes
     private bool prevGravity = false;
@@ -62,6 +64,54 @@ public class HandSkeleton : MonoBehaviour
                     body.useGravity = useGravity;
                 }
             }
+        }
+    }
+
+    void FixedUpdate()
+    {
+        int jointID = 0;
+        // Update the articulation bodies' target angles based on the tracked joint rotations
+        for (int fingerIndex = 0; fingerIndex < Mathf.Min(N_FINGERS, fingers.Length); fingerIndex++)
+        {
+            GameObject currentJoint = fingers[fingerIndex];
+            // Get the corresponding tracked joint transform
+            Transform trackedJoint = trackedFingers[fingerIndex];
+            if (trackedJoint == null || currentJoint == null)
+                break;
+            for (int jointIndex = 0; jointIndex < N_ACTIVE_BONES; jointIndex++)
+            {
+                // Get the degrees of freedom for the current joint
+                int jointDOF = fingerIndex == N_FINGERS - 1 ? perJointDOF[jointIndex + 1] : perJointDOF[jointIndex];
+                if (jointDOF > 0)
+                {
+                    // Update the articulation body's target angle based on the tracked joint's rotation
+                    UpdateJointTarget(jointID, currentJoint, trackedJoint);
+                }
+
+                // Move to the next joint in the finger hierarchy
+                currentJoint = GetChildJoint(currentJoint);
+                trackedJoint = GetChildTransform(trackedJoint);
+                jointID++;
+            }
+        }
+    }
+
+    private void UpdateJointTarget(int jointID, GameObject currentJoint, Transform trackedJoint)
+    {
+        if (currentJoint == null || trackedJoint == null)
+            return;
+
+        ArticulationBody body = currentJoint.GetComponent<ArticulationBody>();
+        if (body != null && body.jointType == ArticulationJointType.RevoluteJoint)
+        {
+            float initialAngle = initialJointAngles[jointID];
+            float currentAngle = Vector3.SignedAngle(trackedJoint.parent.forward, trackedJoint.forward, trackedJoint.right);
+            float targetAngle = currentAngle - initialAngle;
+            var drive = body.xDrive;
+            drive.target = targetAngle;
+            drive.stiffness = fingerStiffness;
+            drive.damping = fingerDamping;
+            body.xDrive = drive;
         }
     }
 
@@ -144,19 +194,27 @@ public class HandSkeleton : MonoBehaviour
                 if (currentJoint == null)
                     break;
 
-                GameObject nextJoint = GetNextJoint(currentJoint);
+                GameObject nextJoint = GetChildJoint(currentJoint);
                 ConstructFingerJoint(fingerIndex, jointIndex, currentJoint, nextJoint);
                 currentJoint = nextJoint;
             }
         }
     }
 
-    private GameObject GetNextJoint(GameObject currentJoint)
+    private GameObject GetChildJoint(GameObject currentJoint)
     {
         if (currentJoint == null || currentJoint.transform.childCount == 0)
             return null;
 
         return currentJoint.transform.GetChild(0).gameObject;
+    }
+
+    private Transform GetChildTransform(Transform currentTransform)
+    {
+        if (currentTransform == null || currentTransform.childCount == 0)
+            return null;
+
+        return currentTransform.GetChild(0);
     }
 
     private void ConstructFingerJoint(int fingerIndex, int jointIndex, GameObject currentJoint, GameObject nextJoint)
@@ -236,9 +294,9 @@ public class HandSkeleton : MonoBehaviour
             {
                 driveType = ArticulationDriveType.Force,
                 target = -initialAngle,
-                stiffness = 1000f,
+                stiffness = fingerStiffness,
                 forceLimit = 1000f,
-                damping = 100f,
+                damping = fingerDamping,
                 lowerLimit = -10f - initialAngle,
                 upperLimit = 89f - initialAngle,
             };
