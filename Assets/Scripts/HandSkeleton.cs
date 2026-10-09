@@ -191,7 +191,6 @@ public class HandSkeleton : MonoBehaviour
         bool useCollider = jointsWithColliders[effectiveIndex];
         int dof = perJointDOF[effectiveIndex];
 
-        // Gets the direction of the bone from the current joint to the next joint
         Vector3 boneDirection = GetBoneVector(currentJoint.transform);
 
         if (useCollider) {
@@ -246,7 +245,11 @@ public class HandSkeleton : MonoBehaviour
         body.mass = perBoneMass;
         body.useGravity = useGravity;
         body.anchorPosition = Vector3.zero;
-        body.anchorRotation = Quaternion.identity;
+        // Anchor rotations are expressed in the articulation body's local frame.
+        // Convert the bone direction to that frame before aligning the anchor's
+        // local forward axis with the bone.
+        Vector3 localBoneDirection = currentJoint.transform.InverseTransformDirection(boneDirection.normalized);
+        body.anchorRotation = Quaternion.FromToRotation(Vector3.forward, localBoneDirection);
         body.solverIterations = 60;
         body.solverVelocityIterations = 20;
         if (dof > 0)
@@ -255,6 +258,7 @@ public class HandSkeleton : MonoBehaviour
             body.twistLock = ArticulationDofLock.LimitedMotion;
             body.xDrive = new ArticulationDrive
             {
+                // Note: positive angles are flexion, negative angles are extension. The initial angle is subtracted from the target to make the joint's current position the zero point for the drive.
                 driveType = ArticulationDriveType.Force,
                 target = -initialAngle,
                 stiffness = fingerStiffness,
@@ -292,6 +296,9 @@ public class HandSkeleton : MonoBehaviour
     /// <param name="jointIndex">The index of the joint to update.</param>
     /// <param name="currentJoint">The current joint.</param>
     /// <param name="trackedJoint">The tracked joint.</param>
+    /// <param name="boneDirection">The direction of the bone.</param>
+    /// <param name="boneUp">The up vector of the bone.</param>
+    /// <returns>The direction of the bone.</returns>
     private void UpdateJointTarget(int jointID, int jointIndex, GameObject currentJoint, Transform trackedJoint)
     {
         if (currentJoint == null || trackedJoint == null)
@@ -300,11 +307,15 @@ public class HandSkeleton : MonoBehaviour
         ArticulationBody body = currentJoint.GetComponent<ArticulationBody>();
         if (body != null && body.jointType == ArticulationJointType.RevoluteJoint)
         {
-            // Calculate the target angle based on the tracked joint's bone direction relative to its parent orientation
+            // Measure the tracked bones around the physics joint's local X axis. The
+            // articulation drive rotates around this axis, and using trackedJoint.right
+            // here can introduce a thumb flexion offset when the two rigs use different
+            // local axes.
             float initialAngle = initialJointAngles[jointID];
             Vector3 trackedBoneDirection = GetBoneVector(trackedJoint);
             Vector3 parentBoneDirection = GetBoneVector(trackedJoint.parent);
-            float currentAngle = Vector3.SignedAngle(parentBoneDirection, trackedBoneDirection, trackedJoint.right);
+            // Note: positive angles are flexion, negative angles are extension. The initial angle is subtracted from the target to make the joint's current position the zero point for the drive.
+            float currentAngle = Vector3.SignedAngle(parentBoneDirection, trackedBoneDirection, currentJoint.transform.right);
             float targetAngle = currentAngle - initialAngle;
             var drive = body.xDrive;
             drive.target = targetAngle;
