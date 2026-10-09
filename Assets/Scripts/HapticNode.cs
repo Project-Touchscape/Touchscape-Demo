@@ -57,7 +57,7 @@ public class HapticNode : MonoBehaviour
     private ArticulationBody physicsAb;
 
     // Mass of articulation body
-    public float physicsMass;
+    private float physicsMass;
 
     // Center of mass of articulation body (world space)
     private Vector3 physicsCOM;
