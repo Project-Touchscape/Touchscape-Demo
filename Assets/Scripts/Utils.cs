@@ -133,61 +133,6 @@ public static class Utils
         }
     }
 
-    public static float MomentOfInertiaAlongAxis(Matrix4x4 inertia, Vector3 axis)
-    {
-        if (axis.sqrMagnitude <= Mathf.Epsilon)
-            return 0f;
-
-        axis.Normalize();
-
-        // The inertia tensor is a 3x3 tensor stored in the upper-left portion of
-        // the Matrix4x4. For a unit torque along axis n, alpha = I^-1 * n.
-        // The effective moment about that axis is:
-        //
-        //     I_axis = 1 / (n^T * I^-1 * n)
-        //
-        // This uses the complete tensor, including products of inertia, rather
-        // than treating the tensor as three independent diagonal values.
-        float a00 = inertia.m00;
-        float a01 = inertia.m01;
-        float a02 = inertia.m02;
-        float a10 = inertia.m10;
-        float a11 = inertia.m11;
-        float a12 = inertia.m12;
-        float a20 = inertia.m20;
-        float a21 = inertia.m21;
-        float a22 = inertia.m22;
-
-        float cofactor00 = a11 * a22 - a12 * a21;
-        float cofactor01 = a02 * a21 - a01 * a22;
-        float cofactor02 = a01 * a12 - a02 * a11;
-        float cofactor10 = a12 * a20 - a10 * a22;
-        float cofactor11 = a00 * a22 - a02 * a20;
-        float cofactor12 = a02 * a10 - a00 * a12;
-        float cofactor20 = a10 * a21 - a11 * a20;
-        float cofactor21 = a01 * a20 - a00 * a21;
-        float cofactor22 = a00 * a11 - a01 * a10;
-
-        float determinant =
-            a00 * cofactor00 +
-            a01 * cofactor10 +
-            a02 * cofactor20;
-
-        if (Mathf.Abs(determinant) <= Mathf.Epsilon)
-            return 0f;
-
-        Vector3 adjugateTimesAxis = new Vector3(
-            cofactor00 * axis.x + cofactor10 * axis.y + cofactor20 * axis.z,
-            cofactor01 * axis.x + cofactor11 * axis.y + cofactor21 * axis.z,
-            cofactor02 * axis.x + cofactor12 * axis.y + cofactor22 * axis.z);
-
-        float inverseInertiaAlongAxis = Vector3.Dot(axis, adjugateTimesAxis) / determinant;
-        if (inverseInertiaAlongAxis <= Mathf.Epsilon)
-            return 0f;
-
-        return 1f / inverseInertiaAlongAxis;
-    }
-
     public static Vector3 AngularVelocityFromQuaternions(Quaternion q1, Quaternion q2, float timeStep)
     {
         // Calculate the angular velocity from two quaternions

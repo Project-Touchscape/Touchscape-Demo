@@ -691,9 +691,9 @@ MonoBehaviour:
   forceFeedback: 1
   collisionFeedback: 1
   useInertia: 0
-  posStiffness: 1
+  posStiffness: 0.481
   posDamping: 1
-  rotStiffness: 0.546
+  rotStiffness: 0.489
   rotDamping: 1
   minForce: 0.01
   visualization: 0

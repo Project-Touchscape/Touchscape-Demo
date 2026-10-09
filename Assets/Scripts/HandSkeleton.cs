@@ -201,19 +201,19 @@ public class HandSkeleton : MonoBehaviour
 
         body.mass = perBoneMass;
         body.useGravity = useGravity;
-        body.anchorPosition = Vector3.zero;
-        body.anchorRotation = Quaternion.identity;
         body.solverIterations = 60;
         body.solverVelocityIterations = 20;
         body.jointType = ArticulationJointType.RevoluteJoint;
         body.twistLock = ArticulationDofLock.LimitedMotion;
         body.xDrive = new ArticulationDrive
         {
+            driveType = ArticulationDriveType.Force,
+            target = 0f,
             stiffness = 1000f,
             forceLimit = 1000f,
             damping = 100f,
             lowerLimit = -10f,
-            upperLimit = 89f
+            upperLimit = 89f,
         };
         articulationBodies.Add(body);
     }
