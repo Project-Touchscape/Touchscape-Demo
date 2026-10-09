@@ -27,9 +27,18 @@ public class HandSkeleton : MonoBehaviour
     public bool useGravity = false;
     public float fingerStiffness = 1000f;
     public float fingerDamping = 100f;
+    [Tooltip("Relative lower and upper drive limits for non-thumb finger joints, in degrees.")]
+    public float fingerLowerLimit = -10f;
+    public float fingerUpperLimit = 89f;
+    [Tooltip("Relative lower and upper drive limits for thumb joints, in degrees.")]
+    public float thumbLowerLimit = -45f;
+    public float thumbUpperLimit = 45f;
+    public bool logThumbJointDebug = true;
+    public float thumbJointLogInterval = 1f;
 
     // Cache previous gravity state to detect changes
     private bool prevGravity = false;
+    private float nextThumbJointLogTime;
 
     private XRHand hand;
     private List<ArticulationBody> articulationBodies = new List<ArticulationBody>();
@@ -85,7 +94,12 @@ public class HandSkeleton : MonoBehaviour
                 if (jointDOF > 0)
                 {
                     // Update the articulation body's target angle based on the tracked joint's rotation
-                    UpdateJointTarget(jointID, jointIndex, currentJoint, trackedJoint);
+                    UpdateJointTarget(
+                        fingerIndex,
+                        jointID,
+                        jointIndex,
+                        currentJoint,
+                        trackedJoint);
                 }
 
                 // Move to the next joint in the finger hierarchy
@@ -233,15 +247,6 @@ public class HandSkeleton : MonoBehaviour
         if (!currentJoint.TryGetComponent<ArticulationBody>(out var body))
             body = currentJoint.AddComponent<ArticulationBody>();
 
-        // Gets initial joint angle using current bone direction relative to parent bone direction (X-axis rotation)
-        float initialAngle = 0f;
-        if (effectiveIndex > 0 && currentJoint.transform.parent != null)
-        {
-            Vector3 parentBoneDirection = GetBoneVector(currentJoint.transform.parent);
-            initialAngle = Vector3.SignedAngle(parentBoneDirection, boneDirection, currentJoint.transform.right);
-        }
-        initialJointAngles.Add(initialAngle);
-
         body.mass = perBoneMass;
         body.useGravity = useGravity;
         body.anchorPosition = Vector3.zero;
@@ -250,22 +255,40 @@ public class HandSkeleton : MonoBehaviour
         // local forward axis with the bone.
         Vector3 localBoneDirection = currentJoint.transform.InverseTransformDirection(boneDirection.normalized);
         body.anchorRotation = Quaternion.FromToRotation(Vector3.forward, localBoneDirection);
+
+        // Calibrate around the same world-space axis used by the articulation body's
+        // X drive, including the configured anchor rotation.
+        float initialAngle = 0f;
+        if (effectiveIndex > 0 && currentJoint.transform.parent != null)
+        {
+            Vector3 parentBoneDirection = GetBoneVector(currentJoint.transform.parent);
+            initialAngle = Vector3.SignedAngle(
+                parentBoneDirection,
+                boneDirection,
+                GetArticulationRightAxis(body));
+        }
+        initialJointAngles.Add(initialAngle);
+
         body.solverIterations = 60;
         body.solverVelocityIterations = 20;
         if (dof > 0)
         {
             body.jointType = ArticulationJointType.RevoluteJoint;
             body.twistLock = ArticulationDofLock.LimitedMotion;
+            float lowerLimit = isThumb ? thumbLowerLimit : fingerLowerLimit - initialAngle;
+            float upperLimit = isThumb ? thumbUpperLimit : fingerUpperLimit - initialAngle;
             body.xDrive = new ArticulationDrive
             {
                 // Note: positive angles are flexion, negative angles are extension. The initial angle is subtracted from the target to make the joint's current position the zero point for the drive.
                 driveType = ArticulationDriveType.Force,
-                target = -initialAngle,
+                target = 0f,
                 stiffness = fingerStiffness,
                 forceLimit = 1000f,
                 damping = fingerDamping,
-                lowerLimit = -10f - initialAngle,
-                upperLimit = 89f - initialAngle,
+                // Drive targets are expressed relative to the calibrated initial
+                // pose, so the limits must use that same zeroed reference frame.
+                lowerLimit = lowerLimit,
+                upperLimit = upperLimit,
             };
         }
         else
@@ -290,6 +313,15 @@ public class HandSkeleton : MonoBehaviour
     }
 
     /// <summary>
+    /// Gets the articulation body's local X axis in world space.
+    /// </summary>
+    private Vector3 GetArticulationRightAxis(ArticulationBody body)
+    {
+        return body.transform.TransformDirection(
+            body.anchorRotation * Vector3.right).normalized;
+    }
+
+    /// <summary>
     /// Updates the target angle of a joint based on the tracked joint's position.
     /// </summary>
     /// <param name="jointID">The ID of the joint to update.</param>
@@ -299,7 +331,12 @@ public class HandSkeleton : MonoBehaviour
     /// <param name="boneDirection">The direction of the bone.</param>
     /// <param name="boneUp">The up vector of the bone.</param>
     /// <returns>The direction of the bone.</returns>
-    private void UpdateJointTarget(int jointID, int jointIndex, GameObject currentJoint, Transform trackedJoint)
+    private void UpdateJointTarget(
+        int fingerIndex,
+        int jointID,
+        int jointIndex,
+        GameObject currentJoint,
+        Transform trackedJoint)
     {
         if (currentJoint == null || trackedJoint == null)
             return;
@@ -315,7 +352,10 @@ public class HandSkeleton : MonoBehaviour
             Vector3 trackedBoneDirection = GetBoneVector(trackedJoint);
             Vector3 parentBoneDirection = GetBoneVector(trackedJoint.parent);
             // Note: positive angles are flexion, negative angles are extension. The initial angle is subtracted from the target to make the joint's current position the zero point for the drive.
-            float currentAngle = Vector3.SignedAngle(parentBoneDirection, trackedBoneDirection, currentJoint.transform.right);
+            float currentAngle = Vector3.SignedAngle(
+                parentBoneDirection,
+                trackedBoneDirection,
+                GetArticulationRightAxis(body));
             float targetAngle = currentAngle - initialAngle;
             var drive = body.xDrive;
             drive.target = targetAngle;
@@ -323,6 +363,48 @@ public class HandSkeleton : MonoBehaviour
             drive.stiffness = fingerStiffness;
             drive.damping = fingerDamping;
             body.xDrive = drive;
+
+            if (logThumbJointDebug &&
+                fingerIndex == N_FINGERS - 1 &&
+                jointIndex == 0 &&
+                Time.time >= nextThumbJointLogTime)
+            {
+                nextThumbJointLogTime = Time.time + Mathf.Max(thumbJointLogInterval, 0.02f);
+                Vector3 physicsBoneDirection = GetBoneVector(currentJoint.transform);
+                Vector3 physicsParentBoneDirection = GetBoneVector(
+                    currentJoint.transform.parent);
+                float physicsAngle = Vector3.SignedAngle(
+                    physicsParentBoneDirection,
+                    physicsBoneDirection,
+                    GetArticulationRightAxis(body));
+                float physicsRelativeAngle = physicsAngle - initialAngle;
+                float angleError = targetAngle - physicsRelativeAngle;
+                float jointForceX = body.jointForce[0];
+                float jointVelocityX = body.jointVelocity[0];
+                float measuredJointAngle = body.jointPosition[0] * Mathf.Rad2Deg;
+                float measuredJointVelocity = jointVelocityX * Mathf.Rad2Deg;
+
+                Debug.Log(
+                    $"[HandSkeleton] Thumb joint {jointIndex} debug\n" +
+                    $"Physics joint: {currentJoint.name}, tracked joint: {trackedJoint.name}\n" +
+                    $"Physics position: {currentJoint.transform.position}, " +
+                    $"tracked position: {trackedJoint.position}\n" +
+                    $"Physics bone: {physicsBoneDirection}, " +
+                    $"tracked bone: {trackedBoneDirection}\n" +
+                    $"Tracked parent bone: {parentBoneDirection}\n" +
+                    $"Articulation right axis: {GetArticulationRightAxis(body)}\n" +
+                    $"Initial angle: {initialAngle:F3}, current angle: {currentAngle:F3}, " +
+                    $"target angle: {targetAngle:F3}, drive target: {drive.target:F3}\n" +
+                    $"Physics angle: {physicsAngle:F3}, physics relative angle: " +
+                    $"{physicsRelativeAngle:F3}, angle error: {angleError:F3}\n" +
+                    $"Joint position angle: {measuredJointAngle:F3}, " +
+                    $"joint velocity: {measuredJointVelocity:F3} deg/s\n" +
+                    $"Joint force X: {jointForceX:F3}, " +
+                    $"joint velocity X: {jointVelocityX:F3}\n" +
+                    $"Drive stiffness: {drive.stiffness:F3}, damping: {drive.damping:F3}, " +
+                    $"force limit: {drive.forceLimit:F3}\n" +
+                    $"Anchor rotation: {body.anchorRotation}, body rotation: {body.transform.rotation}");
+            }
         }
     }
 }
