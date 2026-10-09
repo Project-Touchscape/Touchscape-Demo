@@ -77,9 +77,24 @@ public class HapticRenderClient : MonoBehaviour
     // Haptic node script attached to node object
     private HapticNode node;
 
+    private bool previousUseInertia;
+    private float previousPosStiffness;
+    private float previousPosDamping;
+    private float previousRotStiffness;
+    private float previousRotDamping;
+    private float previousMinForce;
+    private bool previousVisualization;
+    private float previousForceVisualScale;
+    private bool previousDebugMode;
+    private float previousDebugMovementSpeed;
+    private bool settingsInitialized;
+
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     async void Start()
     {
+        InitializeSettingsState();
+        SyncAllNodes();
+
         //Handles client setup
         client = new MinBiTTcpClient();
         // Sets endianness and send mode
@@ -189,6 +204,58 @@ public class HapticRenderClient : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
+        UpdateNodeSettings();
+    }
+
+    private void InitializeSettingsState()
+    {
+        previousUseInertia = useInertia;
+        previousPosStiffness = posStiffness;
+        previousPosDamping = posDamping;
+        previousRotStiffness = rotStiffness;
+        previousRotDamping = rotDamping;
+        previousMinForce = minForce;
+        previousVisualization = visualization;
+        previousForceVisualScale = forceVisualScale;
+        previousDebugMode = debugMode;
+        previousDebugMovementSpeed = debugMovementSpeed;
+        settingsInitialized = true;
+    }
+
+    private void UpdateNodeSettings()
+    {
+        if (!settingsInitialized)
+            InitializeSettingsState();
+
+        bool settingsChanged =
+            previousUseInertia != useInertia ||
+            !Mathf.Approximately(previousPosStiffness, posStiffness) ||
+            !Mathf.Approximately(previousPosDamping, posDamping) ||
+            !Mathf.Approximately(previousRotStiffness, rotStiffness) ||
+            !Mathf.Approximately(previousRotDamping, rotDamping) ||
+            !Mathf.Approximately(previousMinForce, minForce) ||
+            previousVisualization != visualization ||
+            !Mathf.Approximately(previousForceVisualScale, forceVisualScale) ||
+            previousDebugMode != debugMode ||
+            !Mathf.Approximately(previousDebugMovementSpeed, debugMovementSpeed);
+
+        if (!settingsChanged)
+            return;
+
+        SyncAllNodes();
+        InitializeSettingsState();
+    }
+
+    private void SyncAllNodes()
+    {
+        foreach (HapticNode hapticNode in HapticNode.ActiveNodes)
+        {
+            if (hapticNode != null)
+            {
+                hapticNode.haptics = this;
+                hapticNode.CopySettingsFromClient();
+            }
+        }
     }
 
     private Vector3 hardwareToUnityForce(Vector3 force)

@@ -180,14 +180,14 @@ LightingSettings:
   m_PVRFilteringAtrousPositionSigmaIndirect: 2
   m_PVRFilteringAtrousPositionSigmaAO: 1
   m_RespectSceneVisibilityWhenBakingGI: 0
+--- !u!4 &119397409 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 5643220763833292161, guid: 3f7511fbc40ae7a4b89c3298a3de199d, type: 3}
+  m_PrefabInstance: {fileID: 2085467799}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &163104391 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 1546698852902843881, guid: 3f7511fbc40ae7a4b89c3298a3de199d, type: 3}
-  m_PrefabInstance: {fileID: 1355625227}
-  m_PrefabAsset: {fileID: 0}
---- !u!1 &184552619 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 3133494152545806682, guid: 3f7511fbc40ae7a4b89c3298a3de199d, type: 3}
   m_PrefabInstance: {fileID: 1355625227}
   m_PrefabAsset: {fileID: 0}
 --- !u!1 &215855080
@@ -572,25 +572,15 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!4 &377746367 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 2604916979015095787, guid: 3f7511fbc40ae7a4b89c3298a3de199d, type: 3}
+  m_PrefabInstance: {fileID: 2085467799}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &492936111 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 9059255118863023327, guid: 3f7511fbc40ae7a4b89c3298a3de199d, type: 3}
   m_PrefabInstance: {fileID: 1355625227}
-  m_PrefabAsset: {fileID: 0}
---- !u!4 &556528408 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: 3288495761867447508, guid: 3f7511fbc40ae7a4b89c3298a3de199d, type: 3}
-  m_PrefabInstance: {fileID: 2085467799}
-  m_PrefabAsset: {fileID: 0}
---- !u!4 &576266008 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: 1018444605519319862, guid: 3f7511fbc40ae7a4b89c3298a3de199d, type: 3}
-  m_PrefabInstance: {fileID: 2085467799}
-  m_PrefabAsset: {fileID: 0}
---- !u!4 &682907665 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: 7356241863038367081, guid: 3f7511fbc40ae7a4b89c3298a3de199d, type: 3}
-  m_PrefabInstance: {fileID: 2085467799}
   m_PrefabAsset: {fileID: 0}
 --- !u!1 &855936280 stripped
 GameObject:
@@ -703,7 +693,7 @@ MonoBehaviour:
   useInertia: 0
   posStiffness: 1
   posDamping: 1
-  rotStiffness: 1
+  rotStiffness: 0.546
   rotDamping: 1
   minForce: 0.01
   visualization: 0
@@ -773,45 +763,11 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 1, y: 1, z: 1}
   m_Center: {x: 0, y: 0, z: 0}
---- !u!114 &1349910668
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
+--- !u!4 &1338981398 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 5925080913539658014, guid: 3f7511fbc40ae7a4b89c3298a3de199d, type: 3}
+  m_PrefabInstance: {fileID: 2085467799}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 184552619}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 12daaafde9b350b43b7bfa90648eaab2, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  haptics: {fileID: 1085439598}
-  palm: {fileID: 1153670509}
-  trackedPalm: {fileID: 1678121164}
-  initialFingerJoints:
-  - {fileID: 163104391}
-  - {fileID: 1753458411}
-  - {fileID: 492936111}
-  - {fileID: 1463914146}
-  - {fileID: 1355625230}
-  trackedJoints:
-  - {fileID: 556528408}
-  - {fileID: 576266008}
-  - {fileID: 682907665}
-  - {fileID: 2026390595}
-  - {fileID: 1422600271}
-  fingerBoneWidths:
-  - 0.02
-  - 0.018
-  - 0.016
-  thumbBoneWidths:
-  - 0.025
-  - 0.023
-  - 0.021
-  perBoneMass: 3
-  palmMass: 0.3
-  material: {fileID: 13400000, guid: 79f32ab1ddb2e964fbf9bbc1fa6ada07, type: 2}
-  useGravity: 0
 --- !u!1001 &1355625227
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1006,9 +962,9 @@ PrefabInstance:
       insertIndex: -1
       addedObject: {fileID: 1214344665}
     m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 3133494152545806682, guid: 3f7511fbc40ae7a4b89c3298a3de199d, type: 3}
+    - targetCorrespondingSourceObject: {fileID: 491124901914486170, guid: 3f7511fbc40ae7a4b89c3298a3de199d, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 1349910668}
+      addedObject: {fileID: 1355625244}
   m_SourcePrefab: {fileID: 100100000, guid: 3f7511fbc40ae7a4b89c3298a3de199d, type: 3}
 --- !u!4 &1355625228 stripped
 Transform:
@@ -1020,6 +976,50 @@ GameObject:
   m_CorrespondingSourceObject: {fileID: 5541999383842813114, guid: 3f7511fbc40ae7a4b89c3298a3de199d, type: 3}
   m_PrefabInstance: {fileID: 1355625227}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1355625234 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 491124901914486170, guid: 3f7511fbc40ae7a4b89c3298a3de199d, type: 3}
+  m_PrefabInstance: {fileID: 1355625227}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1355625244
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1355625234}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 12daaafde9b350b43b7bfa90648eaab2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  haptics: {fileID: 1085439598}
+  palm: {fileID: 1153670509}
+  trackedRoot: {fileID: 2049366025}
+  initialJoints:
+  - {fileID: 163104391}
+  - {fileID: 1753458411}
+  - {fileID: 492936111}
+  - {fileID: 1463914146}
+  - {fileID: 1355625230}
+  trackedJoints:
+  - {fileID: 377746367}
+  - {fileID: 1513866472}
+  - {fileID: 1338981398}
+  - {fileID: 119397409}
+  - {fileID: 1770177774}
+  fingerBoneWidths:
+  - 0.02
+  - 0.018
+  - 0.016
+  thumbBoneWidths:
+  - 0.025
+  - 0.023
+  - 0.021
+  perBoneMass: 3
+  palmMass: 0.3
+  material: {fileID: 13400000, guid: 79f32ab1ddb2e964fbf9bbc1fa6ada07, type: 2}
+  useGravity: 0
 --- !u!1 &1372590786
 GameObject:
   m_ObjectHideFlags: 0
@@ -1075,15 +1075,15 @@ MonoBehaviour:
   m_DebugDrawJoints: 1
   m_VelocityPrefab: {fileID: 8538602047018081646, guid: 629fd7882ec6bfc499a5fcf20035282b, type: 3}
   m_VelocityType: 2
---- !u!4 &1422600271 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: 4114692932810539891, guid: 3f7511fbc40ae7a4b89c3298a3de199d, type: 3}
-  m_PrefabInstance: {fileID: 2085467799}
-  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1463914146 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 3825817118877560594, guid: 3f7511fbc40ae7a4b89c3298a3de199d, type: 3}
   m_PrefabInstance: {fileID: 1355625227}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &1513866472 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 2539154032915424125, guid: 3f7511fbc40ae7a4b89c3298a3de199d, type: 3}
+  m_PrefabInstance: {fileID: 2085467799}
   m_PrefabAsset: {fileID: 0}
 --- !u!1 &1517268251
 GameObject:
@@ -1206,25 +1206,25 @@ MonoBehaviour:
   m_LightCookieSize: {x: 1, y: 1}
   m_LightCookieOffset: {x: 0, y: 0}
   m_SoftShadowQuality: 0
---- !u!4 &1678121164 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: 2721691953714425675, guid: 3f7511fbc40ae7a4b89c3298a3de199d, type: 3}
-  m_PrefabInstance: {fileID: 2085467799}
-  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1753458411 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 7626659561560410573, guid: 3f7511fbc40ae7a4b89c3298a3de199d, type: 3}
   m_PrefabInstance: {fileID: 1355625227}
   m_PrefabAsset: {fileID: 0}
---- !u!4 &2026390595 stripped
+--- !u!4 &1770177774 stripped
 Transform:
-  m_CorrespondingSourceObject: {fileID: 1590987666903257055, guid: 3f7511fbc40ae7a4b89c3298a3de199d, type: 3}
+  m_CorrespondingSourceObject: {fileID: 2353264378503682855, guid: 3f7511fbc40ae7a4b89c3298a3de199d, type: 3}
   m_PrefabInstance: {fileID: 2085467799}
   m_PrefabAsset: {fileID: 0}
 --- !u!4 &2030412368 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 7879892688974601038, guid: db0ba23231454814db58e1103313f2ed, type: 3}
   m_PrefabInstance: {fileID: 5197828918723694770}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &2049366025 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 2468282021181825328, guid: 3f7511fbc40ae7a4b89c3298a3de199d, type: 3}
+  m_PrefabInstance: {fileID: 2085467799}
   m_PrefabAsset: {fileID: 0}
 --- !u!1001 &2085467799
 PrefabInstance:

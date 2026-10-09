@@ -8,11 +8,27 @@ using UnityEngine;
 
 public class HapticNode : MonoBehaviour
 {
+    private static readonly List<HapticNode> activeNodes = new List<HapticNode>();
+
     // HapticRenderClient script
     public HapticRenderClient haptics;
 
     // Tracking object
     public Transform trackedTransform;
+
+    [Tooltip("Treat the articulation hierarchy as one equivalent rigid body.")]
+    public bool useChainedMass = false;
+
+    public bool useIntertia;
+    public float posStiffness;
+    public float posDamping;
+    public float rotStiffness;
+    public float rotDamping;
+    public float minForce;
+    public bool visualization;
+    public float forceVisualScale;
+    public bool debugMode;
+    public float debugMovementSpeed;
 
     // Force visualization object
     public GameObject forceVisual;
@@ -32,11 +48,29 @@ public class HapticNode : MonoBehaviour
     //Tracked acceleration
     private Vector3 trackedAccel = Vector3.zero;
 
+    // Kinematics of the tracked object's local center of mass.
+    private Vector3 trackedCOMPos = Vector3.zero;
+    private Vector3 trackedCOMVel = Vector3.zero;
+    private Vector3 trackedCOMAccel = Vector3.zero;
+
     // ArticulationBody of the physics object
     private ArticulationBody physicsAb;
 
-    //Previous velocity of physics object
-    private Vector3 prevPhysicsVel = Vector3.zero;
+    // Mass of articulation body
+    public float physicsMass;
+
+    // Center of mass of articulation body (world space)
+    private Vector3 physicsCOM;
+
+    // Intertial matrix of articulation body (world space)
+    private Matrix4x4 physicsInertia;
+
+    // Velocity of the equivalent body's center of mass.
+    private Vector3 physicsCOMVelocity = Vector3.zero;
+    private Vector3 prevPhysicsCOMVel = Vector3.zero;
+
+    // Center of mass relative to the root transform.
+    private Vector3 localCOM = Vector3.zero;
 
     // Force to emulate with tracked object
     private Vector3 forceOnTracked = Vector3.zero;
@@ -52,19 +86,88 @@ public class HapticNode : MonoBehaviour
     // Data mutex
     private object dataLock = new object();
 
+    public static IReadOnlyList<HapticNode> ActiveNodes => activeNodes;
+
+    void OnEnable()
+    {
+        if (!activeNodes.Contains(this))
+            activeNodes.Add(this);
+    }
+
+    void OnDisable()
+    {
+        activeNodes.Remove(this);
+    }
+
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
         // Gets physics object rigidbody
         physicsAb = gameObject.GetComponent<ArticulationBody>();
+        UpdateMassProperties();
+
         physicsCollider = gameObject.GetComponent<Collider>();
         // Gets maximum stiffness and damping coefficients (would bring object to rest in one frame)
         maxStiffness = 1 / Mathf.Pow(Time.fixedDeltaTime, 2);
         maxDamping = 1 / Time.fixedDeltaTime;
 
+        if (trackedTransform != null)
+        {
+            trackedPos = trackedTransform.position;
+            trackedRot = trackedTransform.rotation;
+            trackedCOMPos = trackedTransform.TransformPoint(localCOM);
+        }
+
+        CopySettingsFromClient();
+
         // Visuals start off
         //forceVisual.SetActive(false);
         //collisionVisual.SetActive(false);
+    }
+
+    private void SetInitialMassProperties()
+    {
+        physicsMass = physicsAb.mass;
+        physicsCOM = physicsAb.worldCenterOfMass;
+        physicsInertia = Utils.WorldInertiaMatrix(physicsAb);
+        localCOM = physicsAb.transform.InverseTransformPoint(physicsCOM);
+    }
+
+    public void SetChainedMassProperties()
+    {
+        Utils.GetChainedMassProperties(physicsAb, out float mass, out Vector3 centerOfMass, out Matrix4x4 inertia);
+        physicsMass = mass;
+        physicsCOM = centerOfMass;
+        physicsInertia = inertia;
+        localCOM = physicsAb.transform.InverseTransformPoint(physicsCOM);
+    }
+
+    private void UpdateMassProperties()
+    {
+        if (useChainedMass)
+            SetChainedMassProperties();
+        else
+            SetInitialMassProperties();
+
+        physicsCOMVelocity = physicsAb.linearVelocity +
+            Vector3.Cross(physicsAb.angularVelocity, physicsCOM - physicsAb.worldCenterOfMass);
+    }
+
+    public void CopySettingsFromClient()
+    {
+        if (haptics == null)
+            return;
+
+        useIntertia = haptics.useInertia;
+        posStiffness = haptics.posStiffness;
+        posDamping = haptics.posDamping;
+        rotStiffness = haptics.rotStiffness;
+        rotDamping = haptics.rotDamping;
+        minForce = haptics.minForce;
+        visualization = haptics.visualization;
+        forceVisualScale = haptics.forceVisualScale;
+        debugMode = haptics.debugMode;
+        debugMovementSpeed = haptics.debugMovementSpeed;
     }
 
     void OnTriggerEnter(Collider other)
@@ -95,6 +198,8 @@ public class HapticNode : MonoBehaviour
     // Fixed update is called once per physics frame
     void FixedUpdate()
     {
+        UpdateMassProperties();
+
         // Updates debug movement if debug mode is enabled
         UpdateDebugMovement();
         // Update kinematics of the tracked object
@@ -103,6 +208,13 @@ public class HapticNode : MonoBehaviour
         Vector3 forceOnPhysics = ComputeForceOnPhysics();
         Vector3 torqueOnPhysics = ComputeTorqueOnPhysics();
         physicsAb.AddForce(forceOnPhysics);
+
+        // If center of mass is not aligned, apply torque to cancel
+        // AddForce acts at the root body's COM. Transport the force to the
+        // aggregate COM by adding r x F to the torque applied at the root.
+        Vector3 comOffset = physicsCOM - physicsAb.worldCenterOfMass;
+        torqueOnPhysics += Vector3.Cross(comOffset, forceOnPhysics);
+
         physicsAb.AddTorque(torqueOnPhysics);
 
         // Calculate the force to emulate on the tracked object
@@ -111,16 +223,16 @@ public class HapticNode : MonoBehaviour
         force += GetSpringComponent();
 
         // If inertia is enabled, adds inertial force to the tracked
-        if (haptics.useInertia)
+        if (useIntertia)
         {
             // Gets inertial force on tracked object
-            Vector3 inertialForce = - physicsAb.mass * trackedAccel / Time.fixedDeltaTime;
+            Vector3 inertialForce = -physicsMass * trackedCOMAccel;
             // Adds inertial force to the force vector
             force += inertialForce;
         }
         
         // Clamps force to minimum
-        if (force.magnitude < haptics.minForce)
+        if (force.magnitude < minForce)
         {
             force = Vector3.zero;
         }
@@ -135,7 +247,7 @@ public class HapticNode : MonoBehaviour
         UpdateCollisionVisual();
 
         // Updates previous physics velocity
-        prevPhysicsVel = physicsAb.linearVelocity;
+        prevPhysicsCOMVel = physicsCOMVelocity;
 
         // Publish candidates after trigger callbacks have been evaluated for this physics step.
         UpdateCollisionCandidate(currCandidate);
@@ -262,11 +374,19 @@ public class HapticNode : MonoBehaviour
 
     private void UpdateKinematics()
     {
-        // Get the tracked object's velocity and acceleration
+        // Position error remains based on the GameObject origin.
         Vector3 trackedPosCopy = trackedTransform.position;
         Vector3 prevTrackedPos = GetTrackedPos();
         Vector3 currTrackedVel = (trackedPosCopy - prevTrackedPos) / Time.fixedDeltaTime;
         trackedAccel = (currTrackedVel - trackedVel) / Time.fixedDeltaTime;
+
+        // Velocity and acceleration use the local center of mass.
+        Vector3 trackedCOMCopy = trackedTransform.TransformPoint(localCOM);
+        Vector3 currTrackedCOMVel = (trackedCOMCopy - trackedCOMPos) / Time.fixedDeltaTime;
+        trackedCOMAccel = (currTrackedCOMVel - trackedCOMVel) / Time.fixedDeltaTime;
+        trackedCOMPos = trackedCOMCopy;
+        trackedCOMVel = currTrackedCOMVel;
+
         SetTrackedPos(trackedPosCopy);
         SetTrackedRot(trackedTransform.rotation);
         trackedVel = currTrackedVel;
@@ -274,7 +394,7 @@ public class HapticNode : MonoBehaviour
 
     private Vector3 ComputeForceOnPhysics()
     {
-        if (haptics.posStiffness == 0 && haptics.posDamping == 0)
+        if (posStiffness == 0 && posDamping == 0)
         {
             return Vector3.zero;
         }
@@ -282,13 +402,13 @@ public class HapticNode : MonoBehaviour
         Vector3 trackedPosCopy = GetTrackedPos();
         Vector3 physicsPos = gameObject.transform.position;
 
-        Vector3 physicsVel = physicsAb.linearVelocity;
+        Vector3 physicsVel = physicsCOMVelocity - trackedCOMVel;
 
         Vector3 relPos = physicsPos - trackedPosCopy;
 
         // Applies coefficients
-        Vector3 accel = -(maxStiffness * haptics.posStiffness * relPos + maxDamping * haptics.posDamping * physicsVel);
-        Vector3 force = physicsAb.mass * accel;
+        Vector3 accel = -(maxStiffness * posStiffness * relPos + maxDamping * posDamping * physicsVel);
+        Vector3 force = physicsMass * accel;
         //Print relative position and calculated force
         //Debug.Log($"Relative position: {relPos}, force: {force}");
 
@@ -297,7 +417,7 @@ public class HapticNode : MonoBehaviour
 
     private Vector3 ComputeTorqueOnPhysics()
     {
-        if (haptics.rotStiffness == 0 && haptics.rotDamping == 0)
+        if (rotStiffness == 0 && rotDamping == 0)
         {
             return Vector3.zero;
         }
@@ -308,26 +428,13 @@ public class HapticNode : MonoBehaviour
         Vector3 physicsAngVel = physicsAb.angularVelocity;
 
         // Calculate the relative rotation from tracked to physics in global coordinates
-        Vector3 relRot = AngularVelocityFromQuaternions(trackedRotCopy, physicsRot, 1);
+        Vector3 relRot = Utils.AngularVelocityFromQuaternions(trackedRotCopy, physicsRot, 1);
 
         // Applies coefficients to get necessary angular acceleration
-        Vector3 angAccel = -(maxStiffness * haptics.rotStiffness * relRot + maxDamping * haptics.rotDamping * physicsAngVel);
-        Vector3 axis = angAccel.normalized;
-
-        // Finds moment of inertia
-        float inertia;
-
-        if (axis.magnitude > 0)
-        {
-            // Gets moment of inertia along the axis of rotation
-            inertia = MomentOfInertiaAlongAxis(physicsAb, axis);
-        }
-        else
-        {
-            inertia = 0;
-        }
-
-        Vector3 torque = angAccel * inertia;
+        Vector3 angAccel = -(maxStiffness * rotStiffness * relRot + maxDamping * rotDamping * physicsAngVel);
+        // Apply the complete world-space inertia tensor. This preserves coupling
+        // between axes when the aggregate tensor has products of inertia.
+        Vector3 torque = Utils.MultiplyInertia(physicsInertia, angAccel);
 
         // Print relative rotation and calculated torque
         //Debug.Log($"Relative rotation axis: {relRot.normalized}, angle: {relRot.magnitude} rad, torque: {torque}");
@@ -337,22 +444,23 @@ public class HapticNode : MonoBehaviour
 
     private Vector3 GetSpringComponent()
     {
-        if (haptics.posStiffness == 0 && haptics.posDamping == 0)
+        if (posStiffness == 0 && posDamping == 0)
         {
             return Vector3.zero;
         }
         //Gets previous tracked and physics positions
         Vector3 trackedPosCopy = GetTrackedPos();
         Vector3 prevTrackedPos = trackedPosCopy - trackedVel * Time.fixedDeltaTime;
-        Vector3 prevPhysicsPos = gameObject.transform.position - physicsAb.linearVelocity * Time.fixedDeltaTime;
+        Vector3 prevPhysicsPos = gameObject.transform.position;
 
         //Gets predicted current physics position and velocity
-        Vector3 predPhysicsVel = -haptics.posStiffness * (prevPhysicsPos - prevTrackedPos) / Time.fixedDeltaTime + prevPhysicsVel * (1 - haptics.posDamping);
-        Vector3 predPhysicsPos = (prevTrackedPos - prevPhysicsPos) * haptics.posStiffness + prevPhysicsPos + prevPhysicsVel * Time.fixedDeltaTime * (1 - haptics.posDamping);
+        Vector3 relativeCOMVelocity = prevPhysicsCOMVel - trackedCOMVel;
+        Vector3 predPhysicsVel = -posStiffness * (prevPhysicsPos - prevTrackedPos) / Time.fixedDeltaTime + relativeCOMVelocity * (1 - posDamping);
+        Vector3 predPhysicsPos = (prevTrackedPos - prevPhysicsPos) * posStiffness + prevPhysicsPos + relativeCOMVelocity * Time.fixedDeltaTime * (1 - posDamping);
 
         //Gets predicted (inertial) spring force
-        Vector3 predictedAccel = -(maxStiffness * haptics.posStiffness * (predPhysicsPos - trackedPosCopy) + maxDamping * haptics.posDamping * predPhysicsVel);
-        Vector3 predictedForce = physicsAb.mass * predictedAccel;
+        Vector3 predictedAccel = -(maxStiffness * posStiffness * (predPhysicsPos - trackedPosCopy) + maxDamping * posDamping * predPhysicsVel);
+        Vector3 predictedForce = physicsMass * predictedAccel;
         return predictedForce;
     }
 
@@ -366,22 +474,6 @@ public class HapticNode : MonoBehaviour
 
         // Updates current collision candidate using copy constructor
         currCandidate = new CollisionCandidate(candidate);
-    }
-
-    private float MomentOfInertiaAlongAxis(ArticulationBody rb, Vector3 axis)
-    {
-        axis = Quaternion.Inverse(rb.inertiaTensorRotation) * axis.normalized; //rotating the torque because it’s equivalent and more efficient
-        Vector3 angularAcceleration = new Vector3(Vector3.Dot(Vector3.right, axis) / rb.inertiaTensor.x, Vector3.Dot(Vector3.up, axis) / rb.inertiaTensor.y, Vector3.Dot(Vector3.forward, axis) / rb.inertiaTensor.z); //calculating the angular acceleration that would result from a torque of 1 Nm (the same way that unity does it)
-        return 1 / angularAcceleration.magnitude; //moment of inertia = Torque / angular acceleration
-    }
-
-    private Vector3 AngularVelocityFromQuaternions(Quaternion q1, Quaternion q2, float timeStep)
-    {
-        // Calculate the angular velocity from two quaternions
-        Quaternion delta = Quaternion.Inverse(q1) * q2;
-        delta.ToAngleAxis(out float angle, out Vector3 axis);
-        if (angle > 180f) angle -= 360f; // Ensure shortest path
-        return axis * (angle * Mathf.Deg2Rad / timeStep);
     }
 
     private void OnApplicationQuit()

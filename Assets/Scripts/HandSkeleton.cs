@@ -9,8 +9,8 @@ public class HandSkeleton : MonoBehaviour
 
     public HapticRenderClient haptics;
     public GameObject palm;
-    public Transform trackedPalm;
-    public GameObject[] initialFingerJoints = new GameObject[N_FINGERS];
+    public Transform trackedRoot;
+    public GameObject[] initialJoints = new GameObject[N_FINGERS];
     public Transform[] trackedJoints = new Transform[N_FINGERS];
     public float[] fingerBoneWidths = new float[3] {0.016f, 0.016f, 0.016f};
     public float[] thumbBoneWidths = new float[3] {0.016f, 0.016f, 0.016f};
@@ -29,8 +29,6 @@ public class HandSkeleton : MonoBehaviour
     // Cache previous gravity state to detect changes
     private bool prevGravity = false;
 
-    private float maxStiffness;
-    private float maxDamping;
     private XRHand hand;
     private List<ArticulationBody> articulationBodies = new List<ArticulationBody>();
 
@@ -38,9 +36,7 @@ public class HandSkeleton : MonoBehaviour
     {
         // Set initial gravity state
         prevGravity = useGravity;
-        // Sets max stiffness and damping coefficients (would bring object to rest in one frame)
-        maxStiffness = 1 / Mathf.Pow(Time.fixedDeltaTime, 2);
-        maxDamping = 1 / Time.fixedDeltaTime;
+        
         // Initialize palm articulation body and collider
         ConstructPalm();
         ConstructFingers();
@@ -78,6 +74,13 @@ public class HandSkeleton : MonoBehaviour
         rootBody.solverIterations = 60;
         rootBody.solverVelocityIterations = 20;
         articulationBodies.Add(rootBody);
+
+        // Constructs haptic node at root 
+        if (!gameObject.TryGetComponent<HapticNode>(out var hapticNode))
+            hapticNode = gameObject.AddComponent<HapticNode>();
+        hapticNode.haptics = haptics;
+        hapticNode.trackedTransform = trackedRoot;
+        hapticNode.useChainedMass = true;
 
         // Adds fixed articulation body to palm object
         ArticulationBody palmBody = palm.GetComponent<ArticulationBody>();
@@ -118,24 +121,18 @@ public class HandSkeleton : MonoBehaviour
         // Always apply the configured hand material, including when the collider
         // was already present on the child.
         palmCollider.material = material;
-
-        // Constructs haptic node at palm
-        if (!palm.TryGetComponent<HapticNode>(out var hapticNode))
-            hapticNode = palm.AddComponent<HapticNode>();
-        hapticNode.haptics = haptics;
-        hapticNode.trackedTransform = trackedPalm;
     }
 
     private void ConstructFingers()
     {
         // Each entry is the first joint GameObject for one finger. The remaining joints
         // are found by walking the existing GameObject hierarchy.
-        if (initialFingerJoints == null)
+        if (initialJoints == null)
             return;
 
-        for (int fingerIndex = 0; fingerIndex < Mathf.Min(N_FINGERS, initialFingerJoints.Length); fingerIndex++)
+        for (int fingerIndex = 0; fingerIndex < Mathf.Min(N_FINGERS, initialJoints.Length); fingerIndex++)
         {
-            GameObject currentJoint = initialFingerJoints[fingerIndex];
+            GameObject currentJoint = initialJoints[fingerIndex];
             for (int jointIndex = 0; jointIndex < N_ACTIVE_BONES; jointIndex++)
             {
                 if (currentJoint == null)
@@ -147,7 +144,7 @@ public class HandSkeleton : MonoBehaviour
             }
 
             // Constructs haptic node at fingertip
-            ConstructHapticNode(fingerIndex, currentJoint);
+            //ConstructHapticNode(fingerIndex, currentJoint);
         }
     }
 
