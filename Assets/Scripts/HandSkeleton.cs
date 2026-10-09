@@ -33,8 +33,6 @@ public class HandSkeleton : MonoBehaviour
     [Tooltip("Relative lower and upper drive limits for thumb joints, in degrees.")]
     public float thumbLowerLimit = -45f;
     public float thumbUpperLimit = 45f;
-    public bool logThumbJointDebug = true;
-    public float thumbJointLogInterval = 1f;
 
     // Cache previous gravity state to detect changes
     private bool prevGravity = false;
@@ -364,7 +362,8 @@ public class HandSkeleton : MonoBehaviour
             drive.damping = fingerDamping;
             body.xDrive = drive;
 
-            if (logThumbJointDebug &&
+            // Joint debugging
+            /*if (logThumbJointDebug &&
                 fingerIndex == N_FINGERS - 1 &&
                 jointIndex == 0 &&
                 Time.time >= nextThumbJointLogTime)
@@ -404,7 +403,7 @@ public class HandSkeleton : MonoBehaviour
                     $"Drive stiffness: {drive.stiffness:F3}, damping: {drive.damping:F3}, " +
                     $"force limit: {drive.forceLimit:F3}\n" +
                     $"Anchor rotation: {body.anchorRotation}, body rotation: {body.transform.rotation}");
-            }
+            }*/
         }
     }
 }
