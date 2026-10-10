@@ -15,6 +15,12 @@ public class HandSkeleton : MonoBehaviour
     public float[] fingerBoneWidths = new float[3] {0.016f, 0.016f, 0.016f};
     public float[] thumbBoneWidths = new float[3] {0.016f, 0.016f, 0.016f};
 
+    public float[] fingerJointMinimums = new float[3] {-10f, -10f, -10f};
+    public float[] fingerJointMaximums = new float[3] {89f, 89f, 89f};
+
+    public float[] thumbJointMinimums = new float[3] {-45f, -45f, -45f};
+    public float[] thumbJointMaximums = new float[3] {45f, 45f, 45f};
+
     [SerializeField]
     [Tooltip("The mass of each finger bone")]
     public float perBoneMass = 0.1f;
@@ -27,12 +33,6 @@ public class HandSkeleton : MonoBehaviour
     public bool useGravity = false;
     public float fingerStiffness = 1000f;
     public float fingerDamping = 100f;
-    [Tooltip("Relative lower and upper drive limits for non-thumb finger joints, in degrees.")]
-    public float fingerLowerLimit = -10f;
-    public float fingerUpperLimit = 89f;
-    [Tooltip("Relative lower and upper drive limits for thumb joints, in degrees.")]
-    public float thumbLowerLimit = -45f;
-    public float thumbUpperLimit = 45f;
 
     // Cache previous gravity state to detect changes
     private bool prevGravity = false;
@@ -42,10 +42,8 @@ public class HandSkeleton : MonoBehaviour
     private List<ArticulationBody> articulationBodies = new List<ArticulationBody>();
     private List<float> initialJointAngles = new List<float>();
 
-    // First finger joint is fixed metacarpal, so it doesn't have a collider
-    private bool[] jointsWithColliders = new bool[4] {false, true, true, true};
-    // First finger joint is fixed, second has splay, third and fourth do not have splay
-    private int[] perJointDOF = new int[4] {0, 2, 1, 1};
+    // First joint has splay, second and third do not have splay
+    private int[] perJointDOF = new int[3] {2, 1, 1};
 
     void Start()
     {
@@ -88,7 +86,7 @@ public class HandSkeleton : MonoBehaviour
             for (int jointIndex = 0; jointIndex < N_ACTIVE_BONES; jointIndex++)
             {
                 // Get the degrees of freedom for the current joint
-                int jointDOF = fingerIndex == N_FINGERS - 1 ? perJointDOF[jointIndex + 1] : perJointDOF[jointIndex];
+                int jointDOF = perJointDOF[jointIndex];
                 if (jointDOF > 0)
                 {
                     // Update the articulation body's target angle based on the tracked joint's rotation
@@ -182,6 +180,7 @@ public class HandSkeleton : MonoBehaviour
         for (int fingerIndex = 0; fingerIndex < Mathf.Min(N_FINGERS, fingers.Length); fingerIndex++)
         {
             GameObject currentJoint = fingers[fingerIndex];
+            
             for (int jointIndex = 0; jointIndex < N_ACTIVE_BONES; jointIndex++)
             {
                 if (currentJoint == null)
@@ -197,49 +196,45 @@ public class HandSkeleton : MonoBehaviour
     {
         // Fetch per joint properties
         bool isThumb = fingerIndex == N_FINGERS - 1;
-        float boneWidth = isThumb ? thumbBoneWidths[jointIndex] : fingerBoneWidths[jointIndex];
         // Thumb has one less joint so skip first one
-        int effectiveIndex = isThumb ? jointIndex + 1 : jointIndex;
-        bool useCollider = jointsWithColliders[effectiveIndex];
-        int dof = perJointDOF[effectiveIndex];
+        int dof = perJointDOF[jointIndex];
 
         Vector3 boneDirection = GetBoneVector(currentJoint.transform);
 
-        if (useCollider) {
-            // Put the collider on a child so its rotation can be set independently of the
-            // tracked joint's parent orientation.
-            const string colliderName = "Finger Collider";
-            Transform colliderTransform = currentJoint.transform.Find(colliderName);
-            if (colliderTransform == null)
-            {
-                GameObject colliderObject = new GameObject(colliderName);
-                colliderTransform = colliderObject.transform;
-                colliderTransform.SetParent(currentJoint.transform, false);
-            }
-
-            // Points child object z-axis in the direction of the next joint, or forward if there is no next joint.
-            colliderTransform.localPosition = Vector3.zero;
-            if (boneDirection.sqrMagnitude > Mathf.Epsilon)
-                colliderTransform.rotation = Quaternion.LookRotation(boneDirection.normalized, currentJoint.transform.up);
-
-            // Adds capsule collider to the child object
-            CapsuleCollider capsule = colliderTransform.GetComponent<CapsuleCollider>();
-            if (capsule == null)
-                capsule = colliderTransform.gameObject.AddComponent<CapsuleCollider>();
-
-            // Gets bone length from distance to the next joint
-            float boneLength = boneDirection.magnitude;
-            
-            // Shortens the bone length for the last joint to be tangent to the fingertip
-            if (jointIndex == N_ACTIVE_BONES - 1)
-                boneLength -= boneWidth * 0.5f;
-            
-            capsule.direction = 2;
-            capsule.radius = boneWidth * 0.5f;
-            capsule.height = boneLength + boneWidth;
-            capsule.center = new Vector3(0f, 0f, boneLength * 0.5f);
-            capsule.material = material;
+        float boneWidth = isThumb ? thumbBoneWidths[jointIndex] : fingerBoneWidths[jointIndex];
+        // Put the collider on a child so its rotation can be set independently of the
+        // tracked joint's parent orientation.
+        const string colliderName = "Finger Collider";
+        Transform colliderTransform = currentJoint.transform.Find(colliderName);
+        if (colliderTransform == null)
+        {
+            GameObject colliderObject = new GameObject(colliderName);
+            colliderTransform = colliderObject.transform;
+            colliderTransform.SetParent(currentJoint.transform, false);
         }
+
+        // Points child object z-axis in the direction of the next joint, or forward if there is no next joint.
+        colliderTransform.localPosition = Vector3.zero;
+        if (boneDirection.sqrMagnitude > Mathf.Epsilon)
+            colliderTransform.rotation = Quaternion.LookRotation(boneDirection.normalized, currentJoint.transform.up);
+
+        // Adds capsule collider to the child object
+        CapsuleCollider capsule = colliderTransform.GetComponent<CapsuleCollider>();
+        if (capsule == null)
+            capsule = colliderTransform.gameObject.AddComponent<CapsuleCollider>();
+
+        // Gets bone length from distance to the next joint
+        float boneLength = boneDirection.magnitude;
+        
+        // Shortens the bone length for the last joint to be tangent to the fingertip
+        if (jointIndex == N_ACTIVE_BONES - 1)
+            boneLength -= boneWidth * 0.5f;
+        
+        capsule.direction = 2;
+        capsule.radius = boneWidth * 0.5f;
+        capsule.height = boneLength + boneWidth;
+        capsule.center = new Vector3(0f, 0f, boneLength * 0.5f);
+        capsule.material = material;
 
         // Keep the articulation body on the tracked joint object.
         if (!currentJoint.TryGetComponent<ArticulationBody>(out var body))
@@ -257,7 +252,7 @@ public class HandSkeleton : MonoBehaviour
         // Calibrate around the same world-space axis used by the articulation body's
         // X drive, including the configured anchor rotation.
         float initialAngle = 0f;
-        if (effectiveIndex > 0 && currentJoint.transform.parent != null)
+        if (currentJoint.transform.parent != null)
         {
             Vector3 parentBoneDirection = GetBoneVector(currentJoint.transform.parent);
             initialAngle = Vector3.SignedAngle(
@@ -273,8 +268,8 @@ public class HandSkeleton : MonoBehaviour
         {
             body.jointType = ArticulationJointType.RevoluteJoint;
             body.twistLock = ArticulationDofLock.LimitedMotion;
-            float lowerLimit = isThumb ? thumbLowerLimit : fingerLowerLimit - initialAngle;
-            float upperLimit = isThumb ? thumbUpperLimit : fingerUpperLimit - initialAngle;
+            float lowerLimit = isThumb ? thumbJointMinimums[jointIndex] : fingerJointMinimums[jointIndex] - initialAngle;
+            float upperLimit = isThumb ? thumbJointMaximums[jointIndex] : fingerJointMaximums[jointIndex] - initialAngle;
             body.xDrive = new ArticulationDrive
             {
                 // Note: positive angles are flexion, negative angles are extension. The initial angle is subtracted from the target to make the joint's current position the zero point for the drive.
