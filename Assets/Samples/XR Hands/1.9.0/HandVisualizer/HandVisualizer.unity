@@ -686,6 +686,7 @@ MonoBehaviour:
   rotStiffness: 0.32
   rotDamping: 1
   minForce: 0.01
+  maxForce: 2000
   visualization: 0
   forceVisualScale: 100
   debugMode: 1
@@ -1031,7 +1032,7 @@ MonoBehaviour:
   palmMass: 0.3
   material: {fileID: 13400000, guid: 79f32ab1ddb2e964fbf9bbc1fa6ada07, type: 2}
   useGravity: 0
-  fingerStiffness: 1000
+  fingerStiffness: 500
   fingerDamping: 100
 --- !u!1 &1372590786
 GameObject:

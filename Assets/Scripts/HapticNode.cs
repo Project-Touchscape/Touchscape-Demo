@@ -25,6 +25,7 @@ public class HapticNode : MonoBehaviour
     public float rotStiffness;
     public float rotDamping;
     public float minForce;
+    public float maxForce;
     public bool visualization;
     public float forceVisualScale;
     public bool debugMode;
@@ -164,6 +165,7 @@ public class HapticNode : MonoBehaviour
         rotStiffness = haptics.rotStiffness;
         rotDamping = haptics.rotDamping;
         minForce = haptics.minForce;
+        maxForce = haptics.maxForce;
         visualization = haptics.visualization;
         forceVisualScale = haptics.forceVisualScale;
         debugMode = haptics.debugMode;
@@ -207,6 +209,11 @@ public class HapticNode : MonoBehaviour
         // Calculate the force and torque on the physics object
         Vector3 forceOnPhysics = ComputeForceOnPhysics();
         Vector3 torqueOnPhysics = ComputeTorqueOnPhysics();
+        // Trims by max force
+        if (forceOnPhysics.magnitude > maxForce)
+        {
+            forceOnPhysics = forceOnPhysics.normalized * maxForce;
+        }
         physicsAb.AddForce(forceOnPhysics);
 
         // If center of mass is not aligned, apply torque to cancel

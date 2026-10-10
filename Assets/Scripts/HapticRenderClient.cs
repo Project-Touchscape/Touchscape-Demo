@@ -37,6 +37,7 @@ public class HapticRenderClient : MonoBehaviour
 
     //Minimum force
     public float minForce = 0.01f;
+    public float maxForce = 1000f;
 
     // Whether visualization is enabled
     public bool visualization = false;
