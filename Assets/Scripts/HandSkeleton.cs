@@ -268,8 +268,11 @@ public class HandSkeleton : MonoBehaviour
         {
             body.jointType = ArticulationJointType.RevoluteJoint;
             body.twistLock = ArticulationDofLock.LimitedMotion;
-            float lowerLimit = isThumb ? thumbJointMinimums[jointIndex] : fingerJointMinimums[jointIndex] - initialAngle;
-            float upperLimit = isThumb ? thumbJointMaximums[jointIndex] : fingerJointMaximums[jointIndex] - initialAngle;
+            float lowerLimit = isThumb ? thumbJointMinimums[jointIndex] : fingerJointMinimums[jointIndex];
+            float upperLimit = isThumb ? thumbJointMaximums[jointIndex] : fingerJointMaximums[jointIndex];
+            lowerLimit -= initialAngle;
+            upperLimit -= initialAngle;
+            
             body.xDrive = new ArticulationDrive
             {
                 // Note: positive angles are flexion, negative angles are extension. The initial angle is subtracted from the target to make the joint's current position the zero point for the drive.
