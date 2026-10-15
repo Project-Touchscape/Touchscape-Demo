@@ -9,7 +9,6 @@ public class HandSkeleton : MonoBehaviour
 
     public HapticRenderClient haptics;
     public GameObject palm;
-    public HapticNode palmNode;
     public Transform trackedRoot;
     public GameObject[] fingers = new GameObject[N_FINGERS];
     public Transform[] trackedFingers = new Transform[N_FINGERS];
@@ -34,23 +33,24 @@ public class HandSkeleton : MonoBehaviour
     public bool useGravity = false;
 
     [Range(0f, 1f)]
-    public float palmPosStiffness = 0.5f;
+    public float palmPosStiffness = 0.325f;
     
     public float palmPosDamping = 1f;
     [Range(0f, 1f)]
-    public float palmRotStiffness = 0.5f;
+    public float palmRotStiffness = 0.325f;
     
     public float palmRotDamping = 1f;
     
-    public float palmMaxForce = 1000f;
+    public float palmMaxForce = 80f;
 
     [Range(0f, 1f)]
-    public float fingerStiffness = 0.5f;
+    public float fingerStiffness = 0.325f;
     
     public float fingerDamping = 1f;
     
     public float fingerForceFactor = 1f;
 
+    private HapticNode palmNode;
     // Cache previous gravity state to detect changes
     private bool prevGravity = false;
     private float nextJointLogTime;
