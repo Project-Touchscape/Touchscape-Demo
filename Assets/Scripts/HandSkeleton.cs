@@ -9,6 +9,7 @@ public class HandSkeleton : MonoBehaviour
 
     public HapticRenderClient haptics;
     public GameObject palm;
+    public HapticNode palmNode;
     public Transform trackedRoot;
     public GameObject[] fingers = new GameObject[N_FINGERS];
     public Transform[] trackedFingers = new Transform[N_FINGERS];
@@ -81,6 +82,11 @@ public class HandSkeleton : MonoBehaviour
 
     void Update()
     {
+        
+    }
+
+    void FixedUpdate()
+    {
         // Check if the gravity state has changed
         if (prevGravity != useGravity)
         {
@@ -94,10 +100,7 @@ public class HandSkeleton : MonoBehaviour
                 }
             }
         }
-    }
 
-    void FixedUpdate()
-    {
         int jointID = 0;
         // Update the articulation bodies' target angles based on the tracked joint rotations
         for (int fingerIndex = 0; fingerIndex < Mathf.Min(N_FINGERS, fingers.Length); fingerIndex++)
@@ -128,6 +131,16 @@ public class HandSkeleton : MonoBehaviour
                 jointID++;
             }
         }
+
+        // Update palm haptic node parameters
+        if (palmNode != null)
+        {
+            palmNode.posStiffness = palmPosStiffness;
+            palmNode.posDamping = palmPosDamping;
+            palmNode.rotStiffness = palmRotStiffness;
+            palmNode.rotDamping = palmRotDamping;
+            palmNode.maxForce = palmMaxForce;
+        }
     }
 
     private void ConstructPalm()
@@ -147,17 +160,17 @@ public class HandSkeleton : MonoBehaviour
         articulationBodies.Add(rootBody);
 
         // Constructs haptic node at root 
-        if (!gameObject.TryGetComponent<HapticNode>(out var hapticNode))
-            hapticNode = gameObject.AddComponent<HapticNode>();
-        hapticNode.haptics = haptics;
-        hapticNode.trackedTransform = trackedRoot;
-        hapticNode.useChainedMass = true;
-        hapticNode.posStiffness = palmPosStiffness;
-        hapticNode.posDamping = palmPosDamping;
-        hapticNode.rotStiffness = palmRotStiffness;
-        hapticNode.rotDamping = palmRotDamping;
+        if (!gameObject.TryGetComponent<HapticNode>(out palmNode))
+            palmNode = gameObject.AddComponent<HapticNode>();
+        palmNode.haptics = haptics;
+        palmNode.trackedTransform = trackedRoot;
+        palmNode.useChainedMass = true;
+        palmNode.posStiffness = palmPosStiffness;
+        palmNode.posDamping = palmPosDamping;
+        palmNode.rotStiffness = palmRotStiffness;
+        palmNode.rotDamping = palmRotDamping;
         // Normalizes max force by total mass
-        hapticNode.maxForce = palmMaxForce;
+        palmNode.maxForce = palmMaxForce;
 
         // Adds fixed articulation body to palm object
         ArticulationBody palmBody = palm.GetComponent<ArticulationBody>();
