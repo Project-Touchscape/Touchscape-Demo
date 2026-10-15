@@ -21,6 +21,12 @@ public class HandSkeleton : MonoBehaviour
     public float[] thumbJointMinimums = new float[3] {-45f, -45f, -45f};
     public float[] thumbJointMaximums = new float[3] {45f, 45f, 45f};
 
+    public float fingerSplayMinimum = -10f;
+    public float fingerSplayMaximum = 10f;
+
+    public float thumbSplayMinimum = -45f;
+    public float thumbSplayMaximum = 45f;
+
     [SerializeField]
     [Tooltip("The mass of each finger bone")]
     public float perBoneMass = 0.1f;
@@ -301,7 +307,7 @@ public class HandSkeleton : MonoBehaviour
             initialAngle = Vector3.SignedAngle(
                 parentBoneDirection,
                 boneDirection,
-                GetArticulationRightAxis(body));
+                Utils.GetArticulationRightAxis(body));
         }
         initialJointAngles.Add(initialAngle);
 
@@ -309,7 +315,7 @@ public class HandSkeleton : MonoBehaviour
         body.solverVelocityIterations = 20;
         if (dof > 0)
         {
-            body.jointType = ArticulationJointType.RevoluteJoint;
+            body.jointType = dof == 1 ? ArticulationJointType.RevoluteJoint : ArticulationJointType.SphericalJoint;
             body.twistLock = ArticulationDofLock.LimitedMotion;
             float lowerLimit = isThumb ? thumbJointMinimums[jointIndex] : fingerJointMinimums[jointIndex];
             float upperLimit = isThumb ? thumbJointMaximums[jointIndex] : fingerJointMaximums[jointIndex];
@@ -324,11 +330,28 @@ public class HandSkeleton : MonoBehaviour
                 stiffness = 0f,
                 forceLimit = 0f,
                 damping = 0f,
-                // Drive targets are expressed relative to the calibrated initial
-                // pose, so the limits must use that same zeroed reference frame.
                 lowerLimit = lowerLimit,
                 upperLimit = upperLimit,
             };
+
+            if (dof > 1)
+            {
+                body.swingYLock = ArticulationDofLock.LimitedMotion;
+                body.swingZLock = ArticulationDofLock.LockedMotion;
+                float splayLowerLimit = isThumb ? thumbSplayMinimum : fingerSplayMinimum;
+                float splayUpperLimit = isThumb ? thumbSplayMaximum : fingerSplayMaximum;
+
+                body.yDrive = new ArticulationDrive
+                {
+                    driveType = ArticulationDriveType.Force,
+                    target = 0f,
+                    stiffness = 0f,
+                    forceLimit = 0f,
+                    damping = 0f,
+                    lowerLimit = splayLowerLimit,
+                    upperLimit = splayUpperLimit,
+                };
+            }
         }
         else
         {
@@ -351,14 +374,7 @@ public class HandSkeleton : MonoBehaviour
         return nextJoint.position - currentJoint.position;
     }
 
-    /// <summary>
-    /// Gets the articulation body's local X axis in world space.
-    /// </summary>
-    private Vector3 GetArticulationRightAxis(ArticulationBody body)
-    {
-        return body.transform.TransformDirection(
-            body.anchorRotation * Vector3.right).normalized;
-    }
+    
 
     /// <summary>
     /// Updates the target angle of a joint based on the tracked joint's position.
@@ -390,34 +406,10 @@ public class HandSkeleton : MonoBehaviour
             float initialAngle = initialJointAngles[jointID];
             Vector3 trackedBoneDirection = GetBoneVector(trackedJoint);
             Vector3 parentBoneDirection = GetBoneVector(trackedJoint.parent);
-            Vector3 rightAxis = GetArticulationRightAxis(body);
-            // Note: positive angles are flexion, negative angles are extension. The initial angle is subtracted from the target to make the joint's current position the zero point for the drive.
-            float currentAngle = Vector3.SignedAngle(
-                parentBoneDirection,
-                trackedBoneDirection,
-                rightAxis);
-            float targetAngle = currentAngle - initialAngle;
-            var drive = body.xDrive;
-            drive.target = targetAngle;
-            // Update stiffness and damping in case they have changed
-
-            // Finds moment of inertia of current body and its children
-            Utils.GetChainedMassProperties(body, out float totalMass, out Vector3 com, out Matrix4x4 totalInertia);
-
-            // Applies coefficients to get necessary angular acceleration
-            Vector3 jointPoint = body.transform.TransformPoint(body.anchorPosition);
-            float axisInertia = Utils.InertiaAboutAxisAtPoint(
-                totalInertia,
-                totalMass,
-                com,
-                jointPoint,
-                rightAxis);
-            drive.stiffness = fingerStiffness * axisInertia * maxStiffness;
-            drive.damping = fingerDamping * axisInertia * maxDamping;
-            // Updates force limit based on radius of gyration
-            drive.forceLimit = Mathf.Sqrt(axisInertia / totalMass) * palmMaxForce * fingerForceFactor;
-
-            body.xDrive = drive;
+            Vector3 rightAxis = Utils.GetArticulationRightAxis(body);
+            Vector3 upAxis = Utils.GetArticulationUpAxis(body);
+            body.xDrive = UpdateAxisDrive(body, body.xDrive, rightAxis, initialAngle, parentBoneDirection, trackedBoneDirection);
+            body.yDrive = UpdateAxisDrive(body, body.yDrive, upAxis, 0f, parentBoneDirection, trackedBoneDirection);
 
             // Joint debugging
             /*if (fingerIndex == 0 &&
@@ -432,5 +424,35 @@ public class HandSkeleton : MonoBehaviour
                     $"Current axis inertia: {axisInertia}, total mass: {totalMass}\n");
             }*/
         }
+    }
+
+    private ArticulationDrive UpdateAxisDrive(ArticulationBody body, ArticulationDrive drive, Vector3 axis, float initialAngle, Vector3 parentBoneDirection, Vector3 trackedBoneDirection)
+    {
+        // Note: positive angles are flexion, negative angles are extension. The initial angle is subtracted from the target to make the joint's current position the zero point for the drive.
+        float currentAngle = Vector3.SignedAngle(
+            parentBoneDirection,
+            trackedBoneDirection,
+            axis);
+        float targetAngle = currentAngle - initialAngle;
+        drive.target = targetAngle;
+        // Update stiffness and damping in case they have changed
+
+        // Finds moment of inertia of current body and its children
+        Utils.GetChainedMassProperties(body, out float totalMass, out Vector3 com, out Matrix4x4 totalInertia);
+
+        // Applies coefficients to get necessary angular acceleration
+        Vector3 jointPoint = body.transform.TransformPoint(body.anchorPosition);
+        float axisInertia = Utils.InertiaAboutAxisAtPoint(
+            totalInertia,
+            totalMass,
+            com,
+            jointPoint,
+            axis);
+        drive.stiffness = fingerStiffness * axisInertia * maxStiffness;
+        drive.damping = fingerDamping * axisInertia * maxDamping;
+        // Updates force limit based on radius of gyration
+        drive.forceLimit = Mathf.Sqrt(axisInertia / totalMass) * palmMaxForce * fingerForceFactor;
+        
+        return drive;
     }
 }
