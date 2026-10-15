@@ -20,8 +20,10 @@ public class HapticNode : MonoBehaviour
     public bool useChainedMass = false;
 
     public bool useIntertia;
+    [Range(0f, 1f)]
     public float posStiffness;
     public float posDamping;
+    [Range(0f, 1f)]
     public float rotStiffness;
     public float rotDamping;
     public float minForce;
@@ -119,8 +121,6 @@ public class HapticNode : MonoBehaviour
             trackedCOMPos = trackedTransform.TransformPoint(localCOM);
         }
 
-        CopySettingsFromClient();
-
         // Visuals start off
         //forceVisual.SetActive(false);
         //collisionVisual.SetActive(false);
@@ -152,24 +152,6 @@ public class HapticNode : MonoBehaviour
 
         physicsCOMVelocity = physicsAb.linearVelocity +
             Vector3.Cross(physicsAb.angularVelocity, physicsCOM - physicsAb.worldCenterOfMass);
-    }
-
-    public void CopySettingsFromClient()
-    {
-        if (haptics == null)
-            return;
-
-        useIntertia = haptics.useInertia;
-        posStiffness = haptics.posStiffness;
-        posDamping = haptics.posDamping;
-        rotStiffness = haptics.rotStiffness;
-        rotDamping = haptics.rotDamping;
-        minForce = haptics.minForce;
-        maxForce = haptics.maxForce;
-        visualization = haptics.visualization;
-        forceVisualScale = haptics.forceVisualScale;
-        debugMode = haptics.debugMode;
-        debugMovementSpeed = haptics.debugMovementSpeed;
     }
 
     void OnTriggerEnter(Collider other)

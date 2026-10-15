@@ -31,12 +31,32 @@ public class HandSkeleton : MonoBehaviour
     public PhysicsMaterial material = null;
 
     public bool useGravity = false;
-    public float fingerStiffness = 1000f;
-    public float fingerDamping = 100f;
+
+    [Range(0f, 1f)]
+    public float palmPosStiffness = 0.5f;
+    
+    public float palmPosDamping = 1f;
+    [Range(0f, 1f)]
+    public float palmRotStiffness = 0.5f;
+    
+    public float palmRotDamping = 1f;
+    
+    public float palmMaxForce = 1000f;
+
+    [Range(0f, 1f)]
+    public float fingerStiffness = 0.5f;
+    
+    public float fingerDamping = 1f;
+    
+    public float fingerForceFactor = 1f;
 
     // Cache previous gravity state to detect changes
     private bool prevGravity = false;
-    private float nextThumbJointLogTime;
+    private float nextJointLogTime;
+    private float jointLogInterval = 0.5f;
+
+    private float maxStiffness;
+    private float maxDamping;
 
     private XRHand hand;
     private List<ArticulationBody> articulationBodies = new List<ArticulationBody>();
@@ -49,6 +69,10 @@ public class HandSkeleton : MonoBehaviour
     {
         // Set initial gravity state
         prevGravity = useGravity;
+
+        // Gets maximum stiffness and damping coefficients (would bring object to rest in one frame)
+        maxStiffness = 1 / Mathf.Pow(Time.fixedDeltaTime, 2);
+        maxDamping = 1 / Time.fixedDeltaTime;
         
         // Initialize palm articulation body and collider
         ConstructPalm();
@@ -90,7 +114,7 @@ public class HandSkeleton : MonoBehaviour
                 if (jointDOF > 0)
                 {
                     // Update the articulation body's target angle based on the tracked joint's rotation
-                    UpdateJointTarget(
+                    UpdateJointParams(
                         fingerIndex,
                         jointID,
                         jointIndex,
@@ -128,6 +152,12 @@ public class HandSkeleton : MonoBehaviour
         hapticNode.haptics = haptics;
         hapticNode.trackedTransform = trackedRoot;
         hapticNode.useChainedMass = true;
+        hapticNode.posStiffness = palmPosStiffness;
+        hapticNode.posDamping = palmPosDamping;
+        hapticNode.rotStiffness = palmRotStiffness;
+        hapticNode.rotDamping = palmRotDamping;
+        // Normalizes max force by total mass
+        hapticNode.maxForce = palmMaxForce;
 
         // Adds fixed articulation body to palm object
         ArticulationBody palmBody = palm.GetComponent<ArticulationBody>();
@@ -278,9 +308,9 @@ public class HandSkeleton : MonoBehaviour
                 // Note: positive angles are flexion, negative angles are extension. The initial angle is subtracted from the target to make the joint's current position the zero point for the drive.
                 driveType = ArticulationDriveType.Force,
                 target = 0f,
-                stiffness = fingerStiffness,
-                forceLimit = 1000f,
-                damping = fingerDamping,
+                stiffness = 0f,
+                forceLimit = 0f,
+                damping = 0f,
                 // Drive targets are expressed relative to the calibrated initial
                 // pose, so the limits must use that same zeroed reference frame.
                 lowerLimit = lowerLimit,
@@ -327,7 +357,7 @@ public class HandSkeleton : MonoBehaviour
     /// <param name="boneDirection">The direction of the bone.</param>
     /// <param name="boneUp">The up vector of the bone.</param>
     /// <returns>The direction of the bone.</returns>
-    private void UpdateJointTarget(
+    private void UpdateJointParams(
         int fingerIndex,
         int jointID,
         int jointIndex,
@@ -347,60 +377,46 @@ public class HandSkeleton : MonoBehaviour
             float initialAngle = initialJointAngles[jointID];
             Vector3 trackedBoneDirection = GetBoneVector(trackedJoint);
             Vector3 parentBoneDirection = GetBoneVector(trackedJoint.parent);
+            Vector3 rightAxis = GetArticulationRightAxis(body);
             // Note: positive angles are flexion, negative angles are extension. The initial angle is subtracted from the target to make the joint's current position the zero point for the drive.
             float currentAngle = Vector3.SignedAngle(
                 parentBoneDirection,
                 trackedBoneDirection,
-                GetArticulationRightAxis(body));
+                rightAxis);
             float targetAngle = currentAngle - initialAngle;
             var drive = body.xDrive;
             drive.target = targetAngle;
             // Update stiffness and damping in case they have changed
-            drive.stiffness = fingerStiffness;
-            drive.damping = fingerDamping;
+
+            // Finds moment of inertia of current body and its children
+            Utils.GetChainedMassProperties(body, out float totalMass, out Vector3 com, out Matrix4x4 totalInertia);
+
+            // Applies coefficients to get necessary angular acceleration
+            Vector3 jointPoint = body.transform.TransformPoint(body.anchorPosition);
+            float axisInertia = Utils.InertiaAboutAxisAtPoint(
+                totalInertia,
+                totalMass,
+                com,
+                jointPoint,
+                rightAxis);
+            drive.stiffness = fingerStiffness * axisInertia * maxStiffness;
+            drive.damping = fingerDamping * axisInertia * maxDamping;
+            // Updates force limit based on radius of gyration
+            drive.forceLimit = Mathf.Sqrt(axisInertia / totalMass) * palmMaxForce * fingerForceFactor;
+
             body.xDrive = drive;
 
             // Joint debugging
-            /*if (logThumbJointDebug &&
-                fingerIndex == N_FINGERS - 1 &&
+            /*if (fingerIndex == 0 &&
                 jointIndex == 0 &&
-                Time.time >= nextThumbJointLogTime)
+                Time.time >= nextJointLogTime)
             {
-                nextThumbJointLogTime = Time.time + Mathf.Max(thumbJointLogInterval, 0.02f);
-                Vector3 physicsBoneDirection = GetBoneVector(currentJoint.transform);
-                Vector3 physicsParentBoneDirection = GetBoneVector(
-                    currentJoint.transform.parent);
-                float physicsAngle = Vector3.SignedAngle(
-                    physicsParentBoneDirection,
-                    physicsBoneDirection,
-                    GetArticulationRightAxis(body));
-                float physicsRelativeAngle = physicsAngle - initialAngle;
-                float angleError = targetAngle - physicsRelativeAngle;
-                float jointForceX = body.jointForce[0];
-                float jointVelocityX = body.jointVelocity[0];
-                float measuredJointAngle = body.jointPosition[0] * Mathf.Rad2Deg;
-                float measuredJointVelocity = jointVelocityX * Mathf.Rad2Deg;
+                nextJointLogTime = Time.time + Mathf.Max(jointLogInterval, 0.02f);
 
                 Debug.Log(
-                    $"[HandSkeleton] Thumb joint {jointIndex} debug\n" +
+                    $"[HandSkeleton] Finger {fingerIndex} joint {jointIndex} debug\n" +
                     $"Physics joint: {currentJoint.name}, tracked joint: {trackedJoint.name}\n" +
-                    $"Physics position: {currentJoint.transform.position}, " +
-                    $"tracked position: {trackedJoint.position}\n" +
-                    $"Physics bone: {physicsBoneDirection}, " +
-                    $"tracked bone: {trackedBoneDirection}\n" +
-                    $"Tracked parent bone: {parentBoneDirection}\n" +
-                    $"Articulation right axis: {GetArticulationRightAxis(body)}\n" +
-                    $"Initial angle: {initialAngle:F3}, current angle: {currentAngle:F3}, " +
-                    $"target angle: {targetAngle:F3}, drive target: {drive.target:F3}\n" +
-                    $"Physics angle: {physicsAngle:F3}, physics relative angle: " +
-                    $"{physicsRelativeAngle:F3}, angle error: {angleError:F3}\n" +
-                    $"Joint position angle: {measuredJointAngle:F3}, " +
-                    $"joint velocity: {measuredJointVelocity:F3} deg/s\n" +
-                    $"Joint force X: {jointForceX:F3}, " +
-                    $"joint velocity X: {jointVelocityX:F3}\n" +
-                    $"Drive stiffness: {drive.stiffness:F3}, damping: {drive.damping:F3}, " +
-                    $"force limit: {drive.forceLimit:F3}\n" +
-                    $"Anchor rotation: {body.anchorRotation}, body rotation: {body.transform.rotation}");
+                    $"Current axis inertia: {axisInertia}, total mass: {totalMass}\n");
             }*/
         }
     }

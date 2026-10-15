@@ -1,4 +1,4 @@
-
+using System.Collections.Generic;
 using UnityEngine;
 
 public static class Utils
@@ -87,8 +87,8 @@ public static class Utils
 
     public static void GetChainedMassProperties(ArticulationBody root, out float totalMass, out Vector3 com, out Matrix4x4 totalInertia)
     {
-        ArticulationBody[] bodies =
-            root.GetComponentsInChildren<ArticulationBody>();
+        // Get all child bodies and the current body
+        ArticulationBody[] bodies = root.GetComponentsInChildren<ArticulationBody>();
 
         totalMass = 0f;
         Vector3 weightedCOM = Vector3.zero;
@@ -148,5 +148,34 @@ public static class Utils
             inertia.m00 * vector.x + inertia.m01 * vector.y + inertia.m02 * vector.z,
             inertia.m10 * vector.x + inertia.m11 * vector.y + inertia.m12 * vector.z,
             inertia.m20 * vector.x + inertia.m21 * vector.y + inertia.m22 * vector.z);
+    }
+
+    public static float IntertiaAboutAxis(Matrix4x4 inertia, Vector3 axis)
+    {
+        // Calculate the moment of inertia about a given axis
+        return Vector3.Dot(axis, MultiplyInertia(inertia, axis));
+    }
+
+    public static float InertiaAboutAxisAtPoint(
+        Matrix4x4 inertiaAtCOM,
+        float mass,
+        Vector3 centerOfMass,
+        Vector3 point,
+        Vector3 axis)
+    {
+        if (axis.sqrMagnitude <= Mathf.Epsilon)
+            return 0f;
+
+        axis.Normalize();
+        Vector3 offset = point - centerOfMass;
+        Matrix4x4 parallelAxis = Scale(
+            Subtract(
+                Scale(Matrix4x4.identity, offset.sqrMagnitude),
+                Outer(offset, offset)),
+            mass);
+
+        return IntertiaAboutAxis(
+            Add(inertiaAtCOM, parallelAxis),
+            axis);
     }
 }
