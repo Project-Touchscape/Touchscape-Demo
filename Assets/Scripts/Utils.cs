@@ -193,4 +193,19 @@ public static class Utils
             Add(inertiaAtCOM, parallelAxis),
             axis);
     }
+
+    /// <summary>
+    /// Gets the articulation body's local X axis in world space.
+    /// </summary>
+    public static Vector3 GetArticulationRightAxis(ArticulationBody body)
+    {
+        return body.transform.TransformDirection(
+            body.anchorRotation * Vector3.right).normalized;
+    }
+
+    public static Vector3 GetArticulationUpAxis(ArticulationBody body)
+    {
+        return body.transform.TransformDirection(
+            body.anchorRotation * Vector3.up).normalized;
+    }
 }
