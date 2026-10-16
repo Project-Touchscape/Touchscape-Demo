@@ -12,8 +12,8 @@ public class HandSkeleton : MonoBehaviour
     public Transform trackedRoot;
     public GameObject[] fingers = new GameObject[N_FINGERS];
     public Transform[] trackedFingers = new Transform[N_FINGERS];
-    public float[] fingerBoneWidths = new float[3] {0.016f, 0.016f, 0.016f};
-    public float[] thumbBoneWidths = new float[3] {0.016f, 0.016f, 0.016f};
+    public float[] fingerBoneWidths = new float[3] {0.020f, 0.018f, 0.016f};
+    public float[] thumbBoneWidths = new float[3] {0.025f, 0.023f, 0.021f};
 
     public float[] fingerJointMinimums = new float[3] {-10f, -10f, -10f};
     public float[] fingerJointMaximums = new float[3] {89f, 89f, 89f};
