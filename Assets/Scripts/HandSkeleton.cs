@@ -56,6 +56,7 @@ public class HandSkeleton : MonoBehaviour
     public float palmRotDamping = 1f;
     
     public float palmMaxForce = 80f;
+    public float palmMaxTorque = 100f;
 
     [Range(0f, 1f)]
     public float fingerStiffness = 0.325f;
@@ -161,6 +162,7 @@ public class HandSkeleton : MonoBehaviour
             palmNode.rotStiffness = palmRotStiffness;
             palmNode.rotDamping = palmRotDamping;
             palmNode.maxForce = palmMaxForce;
+            palmNode.maxTorque = palmMaxTorque;
         }
     }
 
@@ -192,6 +194,7 @@ public class HandSkeleton : MonoBehaviour
         palmNode.rotDamping = palmRotDamping;
         // Normalizes max force by total mass
         palmNode.maxForce = palmMaxForce;
+        palmNode.maxTorque = palmMaxTorque;
 
         // Adds fixed articulation body to palm object
         ArticulationBody palmBody = palm.GetComponent<ArticulationBody>();

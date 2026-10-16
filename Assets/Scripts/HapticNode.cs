@@ -18,8 +18,6 @@ public class HapticNode : MonoBehaviour
 
     [Tooltip("Treat the articulation hierarchy as one equivalent rigid body.")]
     public bool useChainedMass = false;
-    [Tooltip("Distribute torque to the entire articulation chain as a unified rigid body.")]
-    public bool useUnifiedRotation = false;
 
     public bool useIntertia;
     [Range(0f, 1f)]
@@ -74,7 +72,6 @@ public class HapticNode : MonoBehaviour
 
     // Velocity of the equivalent body's center of mass.
     private Vector3 physicsCOMVelocity = Vector3.zero;
-    private Vector3 physicsAngularVelocity = Vector3.zero;
     private Vector3 prevPhysicsCOMVel = Vector3.zero;
 
     // Center of mass relative to the root transform.
@@ -158,47 +155,8 @@ public class HapticNode : MonoBehaviour
         else
             SetInitialMassProperties();
 
-        ArticulationBody[] bodies = GetPhysicsBodies();
-        Vector3 weightedVelocity = Vector3.zero;
-        float totalMass = 0f;
-        foreach (ArticulationBody body in bodies)
-        {
-            if (body == null || body.mass <= Mathf.Epsilon)
-                continue;
-
-            weightedVelocity += body.mass * body.linearVelocity;
-            totalMass += body.mass;
-        }
-
-        physicsCOMVelocity = totalMass > Mathf.Epsilon
-            ? weightedVelocity / totalMass
-            : physicsAb.linearVelocity;
-
-        if (useChainedMass && physicsInertia.determinant != 0f)
-        {
-            Vector3 angularMomentum = Vector3.zero;
-            foreach (ArticulationBody body in bodies)
-            {
-                if (body == null || body.mass <= Mathf.Epsilon)
-                    continue;
-
-                Vector3 offset = body.worldCenterOfMass - physicsCOM;
-                angularMomentum += Vector3.Cross(
-                    offset,
-                    body.mass * body.linearVelocity);
-                angularMomentum += Utils.MultiplyInertia(
-                    Utils.WorldInertiaMatrix(body),
-                    body.angularVelocity);
-            }
-
-            physicsAngularVelocity = Utils.MultiplyInertia(
-                physicsInertia.inverse,
-                angularMomentum);
-        }
-        else
-        {
-            physicsAngularVelocity = physicsAb.angularVelocity;
-        }
+        physicsCOMVelocity = physicsAb.linearVelocity +
+            Vector3.Cross(physicsAb.angularVelocity, physicsCOM - physicsAb.worldCenterOfMass);
     }
 
     void OnTriggerEnter(Collider other)
@@ -243,12 +201,14 @@ public class HapticNode : MonoBehaviour
         {
             forceOnPhysics = forceOnPhysics.normalized * maxForce;
         }
+        physicsAb.AddForce(forceOnPhysics);
+
         // Trims by max torque
-        /*if (torqueOnPhysics.magnitude > maxTorque)
+        if (torqueOnPhysics.magnitude > maxTorque)
         {
             torqueOnPhysics = torqueOnPhysics.normalized * maxTorque;
-        }*/
-        ApplyWrench(forceOnPhysics, torqueOnPhysics);
+        }
+        physicsAb.AddTorque(torqueOnPhysics);
 
         // Calculate the force to emulate on the tracked object
         Vector3 force = -forceOnPhysics;
@@ -285,81 +245,6 @@ public class HapticNode : MonoBehaviour
         // Publish candidates after trigger callbacks have been evaluated for this physics step.
         UpdateCollisionCandidate(currCandidate);
         currCandidate = new CollisionCandidate();
-    }
-
-    private ArticulationBody[] GetPhysicsBodies()
-    {
-        if (useChainedMass)
-            return physicsAb.GetComponentsInChildren<ArticulationBody>();
-
-        return new[] { physicsAb };
-    }
-
-    private void ApplyWrench(Vector3 force, Vector3 torque)
-    {
-        ArticulationBody[] bodies = GetPhysicsBodies();
-
-        if (!useChainedMass)
-        {
-            physicsAb.AddForce(force);
-            physicsAb.AddTorque(torque);
-            return;
-        }
-
-        if (physicsMass <= Mathf.Epsilon)
-            return;
-
-        Vector3 linearAcceleration = force / physicsMass;
-        foreach (ArticulationBody body in bodies)
-        {
-            if (body == null || body.mass <= Mathf.Epsilon)
-                continue;
-
-            body.AddForce(body.mass * linearAcceleration);
-        }
-
-        // Compute one world-space angular acceleration for the whole chain.
-        // Each link's moment below is then chosen so that it receives this same
-        // angular acceleration rather than a position-dependent rigid-body
-        // acceleration.
-        Vector3 gyroscopicTorque = Vector3.zero;
-        foreach (ArticulationBody body in bodies)
-        {
-            if (body == null || body.mass <= Mathf.Epsilon)
-                continue;
-
-            Matrix4x4 bodyInertia = Utils.WorldInertiaMatrix(body);
-            Vector3 bodyAngularMomentum = Utils.MultiplyInertia(
-                bodyInertia,
-                body.angularVelocity);
-            gyroscopicTorque += Vector3.Cross(
-                body.angularVelocity,
-                bodyAngularMomentum);
-        }
-
-        Vector3 angularAcceleration = Utils.MultiplyInertia(
-            physicsInertia.inverse,
-            torque - gyroscopicTorque);
-
-        foreach (ArticulationBody body in bodies)
-        {
-            if (body == null || body.mass <= Mathf.Epsilon)
-                continue;
-
-            body.AddForce(body.mass * linearAcceleration);
-
-            Matrix4x4 bodyInertia = Utils.WorldInertiaMatrix(body);
-            Vector3 bodyAngularMomentum = Utils.MultiplyInertia(
-                bodyInertia,
-                body.angularVelocity);
-            Vector3 bodyTorque = Utils.MultiplyInertia(
-                bodyInertia,
-                angularAcceleration) +
-                Vector3.Cross(
-                    body.angularVelocity,
-                    bodyAngularMomentum);
-            body.AddTorque(bodyTorque);
-        }
     }
 
     private void UpdateForceVisual(Vector3 force)
@@ -533,7 +418,7 @@ public class HapticNode : MonoBehaviour
         Quaternion trackedRotCopy = GetTrackedRot();
         Quaternion physicsRot = gameObject.transform.rotation;
 
-        Vector3 physicsAngVel = physicsAngularVelocity;
+        Vector3 physicsAngVel = physicsAb.angularVelocity;
 
         // Calculate the relative rotation from tracked to physics in global coordinates
         Vector3 relRot = Utils.AngularVelocityFromQuaternions(trackedRotCopy, physicsRot, 1);
