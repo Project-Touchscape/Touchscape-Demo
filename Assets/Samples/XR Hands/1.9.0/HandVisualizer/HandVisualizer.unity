@@ -1090,6 +1090,8 @@ MonoBehaviour:
   forceFeedback: 1
   collisionFeedback: 1
   visualization: 0
+  forceVisualPrefab: {fileID: 910768547617064684, guid: 2a12e6e218c663347ad7214e1fb1b21d, type: 3}
+  collisionVisualPrefab: {fileID: 0}
   forceVisualScale: 100
 --- !u!4 &1105916268 stripped
 Transform:

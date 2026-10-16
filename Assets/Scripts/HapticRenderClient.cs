@@ -23,6 +23,12 @@ public class HapticRenderClient : MonoBehaviour
     // Whether visualization is enabled
     public bool visualization = false;
 
+    // Force visualization object
+    public GameObject forceVisualPrefab;
+
+    // Collision visualization object
+    public GameObject collisionVisualPrefab;
+
     // Force visualization scale factor
     public float forceVisualScale = 100;
 
