@@ -135,11 +135,26 @@ public static class Utils
 
     public static Vector3 AngularVelocityFromQuaternions(Quaternion q1, Quaternion q2, float timeStep)
     {
-        // Calculate the angular velocity from two quaternions
-        Quaternion delta = Quaternion.Inverse(q1) * q2;
+        // Calculate the world-space rotation from q1 to q2. The previous order
+        // produced an error in q1's local frame, which was then incorrectly used
+        // as a world-space torque direction.
+        Quaternion delta = q2 * Quaternion.Inverse(q1);
+        if (delta.w < 0f)
+        {
+            delta = new Quaternion(-delta.x, -delta.y, -delta.z, -delta.w);
+        }
+
         delta.ToAngleAxis(out float angle, out Vector3 axis);
-        if (angle > 180f) angle -= 360f; // Ensure shortest path
-        return axis * (angle * Mathf.Deg2Rad / timeStep);
+        if (angle > 180f)
+        {
+            angle = 360f - angle;
+            axis = -axis;
+        }
+
+        if (axis.sqrMagnitude <= Mathf.Epsilon || Mathf.Abs(angle) <= Mathf.Epsilon)
+            return Vector3.zero;
+
+        return axis.normalized * (angle * Mathf.Deg2Rad / timeStep);
     }
 
     public static Vector3 MultiplyInertia(Matrix4x4 inertia, Vector3 vector)
