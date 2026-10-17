@@ -938,12 +938,13 @@ MonoBehaviour:
   palmMass: 0.3
   material: {fileID: 13400000, guid: 79f32ab1ddb2e964fbf9bbc1fa6ada07, type: 2}
   useGravity: 0
-  palmPosStiffness: 0.325
+  palmPosStiffness: 0.9
   palmPosDamping: 1
-  palmRotStiffness: 0.325
+  palmRotStiffness: 0.9
   palmRotDamping: 1
-  palmMaxForce: 80
-  fingerStiffness: 0.325
+  palmMaxForce: 20
+  palmMaxTorque: 50
+  fingerStiffness: 1
   fingerDamping: 1
 --- !u!1 &795889841 stripped
 GameObject:
@@ -1089,7 +1090,7 @@ MonoBehaviour:
   serverPort: 8080
   forceFeedback: 1
   collisionFeedback: 1
-  visualization: 0
+  visualization: 1
   forceVisualPrefab: {fileID: 910768547617064684, guid: 2a12e6e218c663347ad7214e1fb1b21d, type: 3}
   collisionVisualPrefab: {fileID: 0}
   forceVisualScale: 100
@@ -1378,12 +1379,13 @@ MonoBehaviour:
   palmMass: 0.3
   material: {fileID: 13400000, guid: 79f32ab1ddb2e964fbf9bbc1fa6ada07, type: 2}
   useGravity: 0
-  palmPosStiffness: 0.325
+  palmPosStiffness: 0.9
   palmPosDamping: 1
-  palmRotStiffness: 0.325
+  palmRotStiffness: 0.9
   palmRotDamping: 1
-  palmMaxForce: 80
-  fingerStiffness: 0.325
+  palmMaxForce: 20
+  palmMaxTorque: 50
+  fingerStiffness: 1
   fingerDamping: 1
 --- !u!1 &1372590786
 GameObject:
