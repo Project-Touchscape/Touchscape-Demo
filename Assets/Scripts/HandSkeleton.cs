@@ -37,7 +37,7 @@ public class HandSkeleton : MonoBehaviour
 
     [SerializeField]
     [Tooltip("The mass of each finger bone")]
-    public float perBoneMass = 0.1f;
+    public float perBoneMass = 0.006f;
     public float palmMass = 0.3f;
 
     [SerializeField]
@@ -47,19 +47,19 @@ public class HandSkeleton : MonoBehaviour
     public bool useGravity = false;
 
     [Range(0f, 1f)]
-    public float palmPosStiffness = 0.325f;
+    public float palmPosStiffness = 0.9f;
     
     public float palmPosDamping = 1f;
     [Range(0f, 1f)]
-    public float palmRotStiffness = 0.325f;
+    public float palmRotStiffness = 0.9f;
     
     public float palmRotDamping = 1f;
     
-    public float palmMaxForce = 80f;
-    public float palmMaxTorque = 100f;
+    public float palmMaxForce = 20f;
+    public float palmMaxTorque = 40f;
 
     [Range(0f, 1f)]
-    public float fingerStiffness = 0.325f;
+    public float fingerStiffness = 1f;
     
     public float fingerDamping = 1f;
 
@@ -93,6 +93,8 @@ public class HandSkeleton : MonoBehaviour
     // First joint has splay, second and third do not have splay
     private int[] perJointDOF = new int[3] {2, 1, 1};
 
+    private float totalMass;
+
     void Start()
     {
         // Set initial gravity state
@@ -101,6 +103,9 @@ public class HandSkeleton : MonoBehaviour
         // Gets maximum stiffness and damping coefficients (would bring object to rest in one frame)
         maxStiffness = 1 / Mathf.Pow(Time.fixedDeltaTime, 2);
         maxDamping = 1 / Time.fixedDeltaTime;
+
+        // Calculate total mass
+        totalMass = palmMass + (perBoneMass * N_FINGERS * N_ACTIVE_BONES);
         
         // Initialize palm articulation body and collider
         ConstructPalm();

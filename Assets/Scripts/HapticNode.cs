@@ -26,7 +26,7 @@ public class HapticNode : MonoBehaviour
     [Range(0f, 1f)]
     public float rotStiffness;
     public float rotDamping;
-    public float minForce;
+    public float minOutputForce;
     public float maxForce;
     public float maxTorque;
     public bool visualization;
@@ -225,7 +225,7 @@ public class HapticNode : MonoBehaviour
         }
         
         // Clamps force to minimum
-        if (force.magnitude < minForce)
+        if (force.magnitude < minOutputForce)
         {
             force = Vector3.zero;
         }
