@@ -19,7 +19,7 @@ MonoBehaviour:
     width: 1706.6667
     height: 976
   m_ShowMode: 4
-  m_Title: Scene
+  m_Title: Game
   m_RootView: {fileID: 6}
   m_MinSize: {x: 875, y: 300}
   m_MaxSize: {x: 10000, y: 10000}
@@ -73,7 +73,7 @@ MonoBehaviour:
   m_MinSize: {x: 300, y: 100}
   m_MaxSize: {x: 24288, y: 16192}
   vertical: 0
-  controlID: 42
+  controlID: 53
   draggingID: 0
 --- !u!114 &4
 MonoBehaviour:
@@ -224,7 +224,7 @@ MonoBehaviour:
   m_MinSize: {x: 300, y: 100}
   m_MaxSize: {x: 24288, y: 16192}
   vertical: 1
-  controlID: 43
+  controlID: 54
   draggingID: 0
 --- !u!114 &10
 MonoBehaviour:
@@ -251,7 +251,7 @@ MonoBehaviour:
   m_MinSize: {x: 300, y: 50}
   m_MaxSize: {x: 24288, y: 8096}
   vertical: 0
-  controlID: 44
+  controlID: 55
   draggingID: 0
 --- !u!114 &11
 MonoBehaviour:
@@ -319,11 +319,11 @@ MonoBehaviour:
   m_ObjectsLockedBeforeSerialization: []
   m_InstanceIDsLockedBeforeSerialization: 
   m_PreviewResizer:
-    m_CachedPref: 1
+    m_CachedPref: 151
     m_ControlHash: 1412526313
     m_PrefName: Preview_InspectorPreview
   m_LastInspectedObjectInstanceID: -1
-  m_LastVerticalScrollValue: 204.66669
+  m_LastVerticalScrollValue: 0
   m_GlobalObjectId: 
   m_InspectorMode: 0
   m_LockTracker:
@@ -413,7 +413,7 @@ MonoBehaviour:
     m_SkipHidden: 0
     m_SearchArea: 1
     m_Folders:
-    - Assets
+    - Assets/Prefabs
     m_Globs: []
     m_ProductIds: 
     m_AnyWithAssetOrigin: 0
@@ -423,16 +423,16 @@ MonoBehaviour:
   m_ViewMode: 1
   m_StartGridSize: 64
   m_LastFolders:
-  - Assets
+  - Assets/Prefabs
   m_LastFoldersGridSize: -1
   m_LastProjectPath: C:\Users\carso\Documents\GitHub\Project-Touchscape\Touchscape-Demo
   m_LockTracker:
     m_IsLocked: 0
   m_FolderTreeState:
     scrollPos: {x: 0, y: 0}
-    m_SelectedIDs: a0bd0000
-    m_LastClickedID: 48544
-    m_ExpandedIDs: 00000000a0bd0000
+    m_SelectedIDs: dcbe0000
+    m_LastClickedID: 48860
+    m_ExpandedIDs: 0000000060bd0000
     m_RenameOverlay:
       m_UserAcceptedRename: 0
       m_Name: 
@@ -461,7 +461,7 @@ MonoBehaviour:
     scrollPos: {x: 0, y: 0}
     m_SelectedIDs: 
     m_LastClickedID: 0
-    m_ExpandedIDs: 00000000a0bd0000
+    m_ExpandedIDs: 0000000060bd0000
     m_RenameOverlay:
       m_UserAcceptedRename: 0
       m_Name: 
@@ -489,7 +489,7 @@ MonoBehaviour:
   m_ListAreaState:
     m_SelectedInstanceIDs: 
     m_LastClickedInstanceID: 0
-    m_HadKeyboardFocusLastEvent: 0
+    m_HadKeyboardFocusLastEvent: 1
     m_ExpandedInstanceIDs: c6230000
     m_RenameOverlay:
       m_UserAcceptedRename: 0
@@ -560,7 +560,7 @@ MonoBehaviour:
       scrollPos: {x: 0, y: 0}
       m_SelectedIDs: 
       m_LastClickedID: 0
-      m_ExpandedIDs: b4f9ffff16fbffffa2ba0000
+      m_ExpandedIDs: 0c82fdff7482fdff5e83fdfff48cfdff820dfeff120efeff1a0efeff0c12feff8212feff2a50ffff2e50ffff3850ffff4250ffff4450ffff4e50ffff5850ffff5a50ffffea56fffffe56ffff1657ffff2a57ffff3e57ffff74f9ffff86f9ffff98f9ffffa4f9ffffaaf9ffffb4f9ffff16fbffff80ba00009eba0000a2ba0000aeba0000beba0000caba0000685b0100745b0100845b0100005c0100065c01000e5c0100145c01001a5c0100c4860100e0890100
       m_RenameOverlay:
         m_UserAcceptedRename: 0
         m_Name: 
@@ -1094,9 +1094,9 @@ MonoBehaviour:
   m_AudioPlay: 0
   m_DebugDrawModesUseInteractiveLightBakingData: 0
   m_Position:
-    m_Target: {x: 1.7196094, y: 0.15322872, z: 0.4514698}
+    m_Target: {x: -0.78702116, y: -1.0992544, z: 2.0206935}
     speed: 2
-    m_Value: {x: 1.7196094, y: 0.15322872, z: 0.4514698}
+    m_Value: {x: -0.78702116, y: -1.0992544, z: 2.0206935}
   m_RenderMode: 0
   m_CameraMode:
     drawMode: 0
@@ -1142,13 +1142,13 @@ MonoBehaviour:
     m_GridAxis: 1
     m_gridOpacity: 0.5
   m_Rotation:
-    m_Target: {x: 0.024830336, y: -0.7442146, z: -0.028769078, w: -0.6677113}
+    m_Target: {x: -0.24366358, y: 0.33898655, z: -0.09115699, w: -0.9047944}
     speed: 2
-    m_Value: {x: -0.024830336, y: 0.74421453, z: 0.028769078, w: 0.6677113}
+    m_Value: {x: -0.2436636, y: 0.33898655, z: -0.09115699, w: -0.9047944}
   m_Size:
-    m_Target: 0.7657819
+    m_Target: 1.2926341
     speed: 2
-    m_Value: 0.7657819
+    m_Value: 1.2926341
   m_Ortho:
     m_Target: 0
     speed: 2
@@ -1280,7 +1280,7 @@ MonoBehaviour:
   m_ClearInEditMode: 1
   m_NoCameraWarning: 1
   m_LowResolutionForAspectRatios: 01000000000000000000
-  m_XRRenderMode: 0
+  m_XRRenderMode: -1
   m_RenderTexture: {fileID: 0}
   m_showToolbar: 1
 --- !u!114 &18
@@ -1306,7 +1306,7 @@ MonoBehaviour:
     serializedVersion: 2
     x: 0
     y: 610.6667
-    width: 1301
+    width: 1706.6667
     height: 362
   m_SerializedDataModeController:
     m_DataMode: 0
