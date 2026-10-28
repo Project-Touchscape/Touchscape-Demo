@@ -73,7 +73,7 @@ MonoBehaviour:
   m_MinSize: {x: 300, y: 100}
   m_MaxSize: {x: 24288, y: 16192}
   vertical: 0
-  controlID: 53
+  controlID: 56
   draggingID: 0
 --- !u!114 &4
 MonoBehaviour:
@@ -224,7 +224,7 @@ MonoBehaviour:
   m_MinSize: {x: 300, y: 100}
   m_MaxSize: {x: 24288, y: 16192}
   vertical: 1
-  controlID: 54
+  controlID: 57
   draggingID: 0
 --- !u!114 &10
 MonoBehaviour:
@@ -251,7 +251,7 @@ MonoBehaviour:
   m_MinSize: {x: 300, y: 50}
   m_MaxSize: {x: 24288, y: 8096}
   vertical: 0
-  controlID: 55
+  controlID: 58
   draggingID: 0
 --- !u!114 &11
 MonoBehaviour:
@@ -413,7 +413,7 @@ MonoBehaviour:
     m_SkipHidden: 0
     m_SearchArea: 1
     m_Folders:
-    - Assets/Prefabs
+    - Assets/Materials
     m_Globs: []
     m_ProductIds: 
     m_AnyWithAssetOrigin: 0
@@ -423,15 +423,15 @@ MonoBehaviour:
   m_ViewMode: 1
   m_StartGridSize: 64
   m_LastFolders:
-  - Assets/Prefabs
+  - Assets/Materials
   m_LastFoldersGridSize: -1
   m_LastProjectPath: C:\Users\carso\Documents\GitHub\Project-Touchscape\Touchscape-Demo
   m_LockTracker:
     m_IsLocked: 0
   m_FolderTreeState:
     scrollPos: {x: 0, y: 0}
-    m_SelectedIDs: dcbe0000
-    m_LastClickedID: 48860
+    m_SelectedIDs: 9cbe0000
+    m_LastClickedID: 48796
     m_ExpandedIDs: 0000000060bd0000
     m_RenameOverlay:
       m_UserAcceptedRename: 0
@@ -560,7 +560,7 @@ MonoBehaviour:
       scrollPos: {x: 0, y: 0}
       m_SelectedIDs: 
       m_LastClickedID: 0
-      m_ExpandedIDs: 0c82fdff7482fdff5e83fdfff48cfdff820dfeff120efeff1a0efeff0c12feff8212feff2a50ffff2e50ffff3850ffff4250ffff4450ffff4e50ffff5850ffff5a50ffffea56fffffe56ffff1657ffff2a57ffff3e57ffff74f9ffff86f9ffff98f9ffffa4f9ffffaaf9ffffb4f9ffff16fbffff80ba00009eba0000a2ba0000aeba0000beba0000caba0000685b0100745b0100845b0100005c0100065c01000e5c0100145c01001a5c0100c4860100e0890100
+      m_ExpandedIDs: c4f9ffff22faffff2cfaffff16fbffffbaba0000ceba0000daba0000
       m_RenameOverlay:
         m_UserAcceptedRename: 0
         m_Name: 
@@ -1094,9 +1094,9 @@ MonoBehaviour:
   m_AudioPlay: 0
   m_DebugDrawModesUseInteractiveLightBakingData: 0
   m_Position:
-    m_Target: {x: -0.78702116, y: -1.0992544, z: 2.0206935}
+    m_Target: {x: 1.212579, y: -2.6794605, z: 4.647023}
     speed: 2
-    m_Value: {x: -0.78702116, y: -1.0992544, z: 2.0206935}
+    m_Value: {x: 1.212579, y: -2.6794605, z: 4.647023}
   m_RenderMode: 0
   m_CameraMode:
     drawMode: 0
@@ -1142,13 +1142,13 @@ MonoBehaviour:
     m_GridAxis: 1
     m_gridOpacity: 0.5
   m_Rotation:
-    m_Target: {x: -0.24366358, y: 0.33898655, z: -0.09115699, w: -0.9047944}
+    m_Target: {x: -0.2790533, y: -0.122137144, z: 0.03588138, w: -0.95246214}
     speed: 2
-    m_Value: {x: -0.2436636, y: 0.33898655, z: -0.09115699, w: -0.9047944}
+    m_Value: {x: -0.2790533, y: -0.12213715, z: 0.035881385, w: -0.95246214}
   m_Size:
-    m_Target: 1.2926341
+    m_Target: 3.1101518
     speed: 2
-    m_Value: 1.2926341
+    m_Value: 3.1101518
   m_Ortho:
     m_Target: 0
     speed: 2

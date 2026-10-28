@@ -13,6 +13,7 @@ public class HandSkeleton : MonoBehaviour
 
     private const int N_FINGERS = 5;
     private const int N_ACTIVE_BONES = 3;
+    private const string FingerColliderName = "Finger Collider";
 
     public Handedness handedness = Handedness.Right;
     public HapticRenderClient haptics;
@@ -215,20 +216,8 @@ public class HandSkeleton : MonoBehaviour
         palmBody.collisionDetectionMode = CollisionDetectionMode.Continuous;
         articulationBodies.Add(palmBody);
 
-        // Reuse the first child as the palm collider object, creating one when the palm
-        // does not already have a child. The collider must not be added to the palm root,
-        // because the root owns the articulation joint.
-        GameObject palmChild;
-        if (palm.transform.childCount > 0)
-        {
-            palmChild = palm.transform.GetChild(0).gameObject;
-        }
-        else
-        {
-            palmChild = new GameObject(palm.name + " Collider");
-            palmChild.transform.SetParent(palm.transform, false);
-            palmChild.layer = palm.layer;
-        }
+        // The collider must be added to a child object to allow rotation
+        GameObject palmChild = new(palm.name + " Collider");
 
         BoxCollider palmCollider = palmChild.GetComponent<BoxCollider>();
         if (palmCollider == null)
@@ -280,23 +269,26 @@ public class HandSkeleton : MonoBehaviour
         }
     }
 
+    private bool IsThumb(int fingerIndex)
+    {
+        return fingerIndex == N_FINGERS - 1;
+    }
+
     private void ConstructFingerJoint(int fingerIndex, int jointIndex, GameObject currentJoint)
     {
         // Fetch per joint properties
-        bool isThumb = fingerIndex == N_FINGERS - 1;
+        bool isThumb = IsThumb(fingerIndex);
         // Thumb has one less joint so skip first one
         int dof = perJointDOF[jointIndex];
 
         Vector3 boneDirection = GetBoneVector(currentJoint.transform);
 
-        float boneWidth = isThumb ? thumbBoneWidths[jointIndex] : fingerBoneWidths[jointIndex];
         // Put the collider on a child so its rotation can be set independently of the
         // tracked joint's parent orientation.
-        const string colliderName = "Finger Collider";
-        Transform colliderTransform = currentJoint.transform.Find(colliderName);
+        Transform colliderTransform = currentJoint.transform.Find(FingerColliderName);
         if (colliderTransform == null)
         {
-            GameObject colliderObject = new GameObject(colliderName);
+            GameObject colliderObject = new GameObject(FingerColliderName);
             colliderTransform = colliderObject.transform;
             colliderTransform.SetParent(currentJoint.transform, false);
         }
@@ -312,20 +304,9 @@ public class HandSkeleton : MonoBehaviour
         if (capsule == null)
             capsule = colliderTransform.gameObject.AddComponent<CapsuleCollider>();
 
-        // Gets bone length from distance to the next joint
-        float boneLength = boneDirection.magnitude;
-        
-        // Shortens the bone length for the last joint to be tangent to the fingertip
-        if (jointIndex == N_ACTIVE_BONES - 1)
-            boneLength -= boneWidth * 0.5f;
-        
-        capsule.direction = 2;
-        capsule.radius = boneWidth * 0.5f;
-        capsule.height = boneLength + boneWidth;
-        capsule.center = new Vector3(0f, 0f, boneLength * 0.5f);
-        capsule.material = material;
+        UpdateBoneCollider(isThumb, jointIndex, capsule, boneDirection.magnitude);
 
-        // Keep the articulation body on the tracked joint object.
+        // Add the articulation body to the current joint object
         if (!currentJoint.TryGetComponent<ArticulationBody>(out var body))
             body = currentJoint.AddComponent<ArticulationBody>();
 
@@ -353,6 +334,7 @@ public class HandSkeleton : MonoBehaviour
             body.twistLock = ArticulationDofLock.LimitedMotion;
             float lowerLimit = isThumb ? thumbJointMinimums[jointIndex] : fingerJointMinimums[jointIndex];
             float upperLimit = isThumb ? thumbJointMaximums[jointIndex] : fingerJointMaximums[jointIndex];
+            // Note: limits are referenced to initial angle so that parallel with parent bone is zero
             lowerLimit -= initialAngle;
             upperLimit -= initialAngle;
             
@@ -370,6 +352,7 @@ public class HandSkeleton : MonoBehaviour
 
             if (dof > 1)
             {
+                // Creates splay drive
                 float initialSplayAngle = Vector3.SignedAngle(parentBoneDirection, boneDirection, Utils.GetArticulationUpAxis(body));
                 initialSplayAngles[fingerIndex] = initialSplayAngle;
 
@@ -411,7 +394,21 @@ public class HandSkeleton : MonoBehaviour
         return nextJoint.position - currentJoint.position;
     }
 
-    
+    private void UpdateBoneCollider(bool isThumb, int jointIndex, CapsuleCollider collider, float boneLength)
+    {
+        // Gets the bone width for the current joint
+        float boneWidth = isThumb ? thumbBoneWidths[jointIndex] : fingerBoneWidths[jointIndex];
+
+        // Shortens the bone length for the last joint to be tangent to the fingertip
+        if (jointIndex == N_ACTIVE_BONES - 1)
+            boneLength -= boneWidth * 0.5f;
+        
+        collider.direction = 2;
+        collider.radius = boneWidth * 0.5f;
+        collider.height = boneLength + boneWidth;
+        collider.center = new Vector3(0f, 0f, boneLength * 0.5f);
+        collider.material = material;
+    }
 
     /// <summary>
     /// Updates the target angle of a joint based on the tracked joint's position.
@@ -432,6 +429,24 @@ public class HandSkeleton : MonoBehaviour
     {
         if (currentJoint == null || trackedJoint == null)
             return;
+
+        // Ensures metacarpal joint position is aligned with the tracked hand
+        if (jointIndex == 0)
+        {
+            alignJointPosition(currentJoint.transform, trackedJoint);
+        }
+
+        // Updates other joint positions and collider to account for potential changes in bone length
+        float boneLength = updateBoneLength(currentJoint.transform, trackedJoint);
+        Transform colliderTransform = currentJoint.transform.Find(FingerColliderName);
+        CapsuleCollider collider = colliderTransform == null
+            ? null
+            : colliderTransform.GetComponent<CapsuleCollider>();
+        if (collider != null)
+        {
+            UpdateBoneCollider(IsThumb(fingerIndex), jointIndex, collider, boneLength);
+        }
+
         float dof = perJointDOF[jointIndex];
         ArticulationBody body = currentJoint.GetComponent<ArticulationBody>();
         if (body == null)
@@ -478,6 +493,21 @@ public class HandSkeleton : MonoBehaviour
                 }*/
             }
         }
+    }
+
+    private void alignJointPosition(Transform physicsJoint, Transform trackedJoint)
+    {
+        Vector3 trackedRelPos = trackedRoot.InverseTransformPoint(trackedJoint.position);
+        physicsJoint.position = gameObject.transform.TransformPoint(trackedRelPos);
+    }
+
+    private float updateBoneLength(Transform physicsJoint, Transform trackedJoint)
+    {
+        float trackedBoneLength = GetBoneVector(trackedJoint).magnitude;
+        float physicsBoneLength = GetBoneVector(physicsJoint).magnitude;
+        Transform child = physicsJoint.GetChild(0);
+        child.localPosition *= trackedBoneLength / physicsBoneLength;
+        return trackedBoneLength;
     }
 
     private void LogSplayJoint(

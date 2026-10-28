@@ -66,7 +66,7 @@ public class HapticRenderClient : MonoBehaviour
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     async void Start()
     {
-        //Handles client setup
+        /*//Handles client setup
         client = new MinBiTTcpClient();
         // Sets endianness and send mode
         client.SetEndianness(MinBiTTcpClient.Endianness.BigEndian);
@@ -82,6 +82,7 @@ public class HapticRenderClient : MonoBehaviour
         // Sets request timeout
         client.SetRequestTimeout(500);
         await client.ConnectToServer(serverAddress, serverPort);
+        */
     }
 
     private void PollServer()
