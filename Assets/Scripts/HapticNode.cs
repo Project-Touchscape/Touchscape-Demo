@@ -13,12 +13,13 @@ public class HapticNode : MonoBehaviour
     public Transform trackedTransform;
 
     public bool useInertia;
-    public float inertiaCorrection = 0.5f;
     [Range(0f, 1f)]
     public float posStiffness;
+    [Range(0f, 1f)]
     public float posDamping;
     [Range(0f, 1f)]
     public float rotStiffness;
+    [Range(0f, 1f)]
     public float rotDamping;
     public float minOutputForce;
     public float maxForce;
@@ -26,6 +27,7 @@ public class HapticNode : MonoBehaviour
 
     // Force visualization object
     private GameObject forceVisual;
+    private bool initialized;
 
     // Maximum stiffness and damping
     protected float maxStiffness;
@@ -47,26 +49,52 @@ public class HapticNode : MonoBehaviour
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     protected void Start()
     {
+        Initialize();
+    }
+
+    private void Initialize()
+    {
+        if (initialized)
+            return;
+
         if (haptics != null)
             haptics.RegisterNode(this);
+        else
+        {
+            Debug.LogError($"[{name}] HapticNode requires a HapticRenderClient reference.");
+            return;
+        }
 
         // Gets maximum stiffness and damping coefficients (would bring object to rest in one frame)
         maxStiffness = 1 / Mathf.Pow(Time.fixedDeltaTime, 2);
         maxDamping = 1 / Time.fixedDeltaTime;
 
         // Spawn force visual on tracked transform
+        if (trackedTransform == null)
+        {
+            Debug.LogError($"[{name}] HapticNode requires a tracked transform.");
+            return;
+        }
+
+        if (haptics.forceVisualPrefab == null)
+        {
+            Debug.LogError($"[{name}] HapticRenderClient requires a force visual prefab.");
+            return;
+        }
+
         forceVisual = Instantiate(haptics.forceVisualPrefab, trackedTransform.position, trackedTransform.rotation);
         forceVisual.transform.SetParent(trackedTransform, true);
         forceVisual.SetActive(false);
+        initialized = true;
     }
 
     // Usually called from the physics update loop to update the wrench on the physics object
     public void UpdateWrench(Vector3 forceOnTracked, Vector3 torqueOnTracked, Vector3 inertiaForce)
     {
+        Initialize();
 
         // Calculate the force to emulate on the tracked object
         Vector3 force = forceOnTracked;
-        force += inertiaForce*inertiaCorrection;
 
         // If inertia is enabled, adds inertial force to the tracked
         if (useInertia)
@@ -74,8 +102,6 @@ public class HapticNode : MonoBehaviour
             force += inertiaForce;
         }
 
-        Debug.Log($"Force on tracked: {force}, Inertia force: {inertiaForce}");
-        
         // Clamps force to minimum
         if (force.magnitude < minOutputForce)
         {
@@ -88,6 +114,9 @@ public class HapticNode : MonoBehaviour
 
     private void UpdateForceVisual(Vector3 force)
     {
+        if (!initialized)
+            return;
+
         // If visualization is on and a force is present
         if (haptics.visualization && force.magnitude > 0)
         {

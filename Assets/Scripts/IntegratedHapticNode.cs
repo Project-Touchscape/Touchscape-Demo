@@ -17,6 +17,7 @@ public class IntegratedHapticNode : HapticNode
     private Quaternion trackedRot = Quaternion.identity;
     private Quaternion prevTrackedRot = Quaternion.identity;
     private Vector3 trackedVel = Vector3.zero;
+    private Vector3 trackedAccel = Vector3.zero;
     private Vector3 prevTrackedVel = Vector3.zero;
     private Vector3 trackedAngVel = Vector3.zero;
     private Vector3 prevTrackedAngVel = Vector3.zero;
@@ -34,6 +35,12 @@ public class IntegratedHapticNode : HapticNode
     private Vector3 physicsVel = Vector3.zero;
     private Vector3 prevPhysicsVel = Vector3.zero;
     private Vector3 physicsAccel = Vector3.zero;
+    private Vector3 previousForceOnPhysics = Vector3.zero;
+    private bool hasPreviousPhysicsStep;
+    private float nextDiagnosticsTime;
+    private int fixedStep;
+    private Vector3 previousRelativePosition = Vector3.zero;
+    private bool hasPreviousRelativePosition;
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     new protected void Start()
@@ -72,6 +79,7 @@ public class IntegratedHapticNode : HapticNode
     // Fixed update is called once per physics frame
     protected void FixedUpdate()
     {
+        fixedStep++;
         UpdateMassProperties();
 
         // Update kinematics of the tracked object
@@ -81,25 +89,28 @@ public class IntegratedHapticNode : HapticNode
         Vector3 newTorqueOnPhysics = ComputeTorqueOnPhysics();
 
         // Gets inertia force to apply if applicable
-        Vector3 inertiaForce = -physicsMass * physicsAccel;
+        Vector3 inertiaForce = -physicsMass * trackedAccel;
         // Gets accurate force to apply on tracked object
         Vector3 trackedForce = GetForceOnTracked();
         UpdateWrench(trackedForce, newTorqueOnPhysics, inertiaForce);
 
         // Trims by max force
-        /*if (newForceOnPhysics.magnitude > maxForce)
+        if (newForceOnPhysics.magnitude > maxForce)
         {
             newForceOnPhysics = newForceOnPhysics.normalized * maxForce;
-        }*/
+        }
         physicsAb.AddForce(newForceOnPhysics);
+        previousForceOnPhysics = newForceOnPhysics;
+        hasPreviousPhysicsStep = true;
 
         // Trims by max torque
-        /*if (newTorqueOnPhysics.magnitude > maxTorque)
+        if (newTorqueOnPhysics.magnitude > maxTorque)
         {
             newTorqueOnPhysics = newTorqueOnPhysics.normalized * maxTorque;
-        }*/
+        }
         physicsAb.AddTorque(newTorqueOnPhysics);
 
+        //LogDiagnostics(newForceOnPhysics, newTorqueOnPhysics, trackedForce, inertiaForce);
     }
 
     // Update is called once per frame
@@ -114,9 +125,8 @@ public class IntegratedHapticNode : HapticNode
         trackedPos = trackedTransform.position;
         prevTrackedVel = trackedVel;
         trackedVel = (trackedPos - prevTrackedPos) / Time.fixedDeltaTime;
+        trackedAccel = (trackedVel - prevTrackedVel) / Time.fixedDeltaTime;
 
-        Debug.Log($"Tracked position: {trackedPos}, tracked velocity: {trackedVel}");
-        Debug.Log($"Previous tracked position: {prevTrackedPos}, previous tracked velocity: {prevTrackedVel}");
         // Tracked rotation kinematics
         prevTrackedRot = trackedRot;
         trackedRot = trackedTransform.rotation;
@@ -131,22 +141,21 @@ public class IntegratedHapticNode : HapticNode
 
     private Vector3 ComputeForceOnPhysics()
     {
-        return ComputeForceOnPhysics(trackedTransform.position, trackedVel);
+        return ComputeForceOnPhysics(trackedTransform.position);
     }
 
-    private Vector3 ComputeForceOnPhysics(Vector3 trackedPosition, Vector3 trackedVelocity)
+    private Vector3 ComputeForceOnPhysics(Vector3 trackedPosition)
     {
-        if (posStiffness == 0 && posDamping == 0)
+        if (posStiffness == 0)
         {
             return Vector3.zero;
         }
 
-        Vector3 relVel = physicsAb.linearVelocity - trackedVelocity;
-
         Vector3 relPos = physicsAb.transform.position - trackedPosition;
 
-        // Applies coefficients
-        Vector3 accel = -(maxStiffness * posStiffness * relPos + maxDamping * posDamping * relVel);
+        Vector3 accel =
+            -(maxStiffness * posStiffness * relPos
+            + maxDamping * posDamping * physicsAb.linearVelocity);
         Vector3 force = physicsMass * accel;
         //Print relative position and calculated force
         //Debug.Log($"Relative position: {relPos}, force: {force}");
@@ -156,21 +165,25 @@ public class IntegratedHapticNode : HapticNode
 
     private Vector3 ComputeTorqueOnPhysics()
     {
-        if (rotStiffness == 0 && rotDamping == 0)
+        if (rotStiffness == 0)
         {
             return Vector3.zero;
         }
         // Get orientations and angular velocities
-        Quaternion trackedRotCopy = trackedTransform.rotation;
+        Quaternion trackedRotCopy = trackedRot;
         Quaternion physicsRot = gameObject.transform.rotation;
 
-        Vector3 physicsAngVel = physicsAb.angularVelocity - trackedAngVel;
+        Vector3 physicsAngVel = physicsAb.angularVelocity;
 
         // Calculate the relative rotation from tracked to physics in global coordinates
-        Vector3 relRot = Utils.AngularVelocityFromQuaternions(trackedRotCopy, physicsRot, 1);
+        Vector3 relRot = Utils.AngularVelocityFromQuaternions(
+            trackedRotCopy,
+            physicsRot,
+            1);
 
-        // Applies coefficients to get necessary angular acceleration
-        Vector3 angAccel = -(maxStiffness * rotStiffness * relRot + maxDamping * rotDamping * physicsAngVel);
+        Vector3 angAccel =
+            -(maxStiffness * rotStiffness * relRot
+            + maxDamping * rotDamping * physicsAngVel);
         // Apply the complete world-space inertia tensor. This preserves coupling
         // between axes when the aggregate tensor has products of inertia.
         Vector3 torque = Utils.MultiplyInertia(physicsInertia, angAccel);
@@ -183,11 +196,87 @@ public class IntegratedHapticNode : HapticNode
 
     private Vector3 GetForceOnTracked()
     {
-        // Evaluate the physics force against the tracked object's constant-velocity
-        // trajectory from the previous timestep, then apply the equal and opposite
-        // force to the tracked object.
-        Vector3 constantVelocityPos =
-            prevTrackedPos + prevTrackedVel * Time.fixedDeltaTime;
-        return -ComputeForceOnPhysics(constantVelocityPos, prevTrackedVel);
+        // Estimate the external force from the previous physics step:
+        //
+        //     F_external = m * acceleration - F_controller
+        //
+        // The controller force is subtracted so that a body with no external
+        // force produces zero haptic force, even while it is being controlled.
+        Vector3 externalForce =
+            physicsMass * physicsAccel - previousForceOnPhysics;
+
+        if (!hasPreviousPhysicsStep)
+            return Vector3.zero;
+
+        return externalForce;
     }
+
+    private void LogDiagnostics(
+        Vector3 forceOnPhysics,
+        Vector3 torqueOnPhysics,
+        Vector3 forceOnTracked,
+        Vector3 inertiaForce)
+    {
+        float timeStep = Time.fixedDeltaTime;
+        Vector3 relPos = physicsAb.transform.position - trackedTransform.position;
+        Vector3 dampingVelocity = physicsVel;
+        Vector3 controlAcceleration =
+            -(maxStiffness * posStiffness * relPos
+            + maxDamping * posDamping * dampingVelocity);
+        float relativePositionDot =
+            hasPreviousRelativePosition
+                ? Vector3.Dot(previousRelativePosition, relPos)
+                : 0f;
+
+        Debug.Log(
+            $"[{name}] Step={fixedStep}, t={Time.time:F4}, dt={timeStep:F6}\n" +
+            $"tracked pos={trackedTransform.position}, prev={prevTrackedPos}, " +
+            $"vel={trackedVel}, prevVel={prevTrackedVel}\n" +
+            $"physics pos={physicsAb.transform.position}, vel={physicsVel}, " +
+            $"accel={physicsAccel}, mass={physicsMass:F6}\n" +
+            $"relative pos={relPos}, |pos|={relPos.magnitude:F6}, " +
+            $"damping velocity={dampingVelocity}, " +
+            $"|vel|={dampingVelocity.magnitude:F6}\n" +
+            $"control accel={controlAcceleration}\n" +
+            $"position dot previous={relativePositionDot:F6}\n" +
+            $"force physics={forceOnPhysics}, |force|={forceOnPhysics.magnitude:F6}, " +
+            $"force tracked={forceOnTracked}, |force|={forceOnTracked.magnitude:F6}\n" +
+            $"inertia force={inertiaForce}, |inertia|={inertiaForce.magnitude:F6}, " +
+            $"torque={torqueOnPhysics}, |torque|={torqueOnPhysics.magnitude:F6}");
+
+        if (hasPreviousRelativePosition && relativePositionDot < 0f)
+        {
+            Debug.LogWarning(
+                $"[{name}] Relative position crossed through zero; " +
+                "this is an overshoot indicator.");
+        }
+
+        if (!IsFinite(forceOnPhysics) || !IsFinite(forceOnTracked) ||
+            !IsFinite(inertiaForce) || !IsFinite(torqueOnPhysics))
+        {
+            Debug.LogError($"[{name}] Non-finite control output detected.");
+        }
+
+        if (forceOnPhysics.magnitude > maxForce ||
+            torqueOnPhysics.magnitude > maxTorque)
+        {
+            Debug.LogWarning(
+                $"[{name}] Control output exceeds configured limits. " +
+                $"force={forceOnPhysics.magnitude:F6}/{maxForce:F6}, " +
+                $"torque={torqueOnPhysics.magnitude:F6}/{maxTorque:F6}. " +
+                "The runtime clamps are currently disabled.");
+        }
+
+        previousRelativePosition = relPos;
+        hasPreviousRelativePosition = true;
+    }
+
+    private static bool IsFinite(Vector3 value)
+    {
+        return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
+    }
+
+    private static bool IsFinite(float value)
+    {
+        return !float.IsNaN(value) && !float.IsInfinity(value);    }
 }
