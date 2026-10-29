@@ -88,20 +88,12 @@ public class IntegratedHapticNode : HapticNode
         Vector3 newForceOnPhysics = ComputeForceOnPhysics();
         Vector3 newTorqueOnPhysics = ComputeTorqueOnPhysics();
 
-        // Gets inertia force to apply if applicable
-        Vector3 inertiaForce = -physicsMass * trackedAccel;
-        // Gets accurate force to apply on tracked object
-        Vector3 trackedForce = GetForceOnTracked();
-        UpdateWrench(trackedForce, newTorqueOnPhysics, inertiaForce);
-
         // Trims by max force
         if (newForceOnPhysics.magnitude > maxForce)
         {
             newForceOnPhysics = newForceOnPhysics.normalized * maxForce;
         }
         physicsAb.AddForce(newForceOnPhysics);
-        previousForceOnPhysics = newForceOnPhysics;
-        hasPreviousPhysicsStep = true;
 
         // Trims by max torque
         if (newTorqueOnPhysics.magnitude > maxTorque)
@@ -109,6 +101,15 @@ public class IntegratedHapticNode : HapticNode
             newTorqueOnPhysics = newTorqueOnPhysics.normalized * maxTorque;
         }
         physicsAb.AddTorque(newTorqueOnPhysics);
+
+        previousForceOnPhysics = newForceOnPhysics;
+        hasPreviousPhysicsStep = true;
+
+        // Gets inertia force to apply if applicable
+        Vector3 inertiaForce = -physicsMass * trackedAccel;
+        // Gets accurate force to apply on tracked object
+        Vector3 trackedForce = GetForceOnTracked();
+        UpdateWrench(trackedForce, newTorqueOnPhysics, inertiaForce);
 
         //LogDiagnostics(newForceOnPhysics, newTorqueOnPhysics, trackedForce, inertiaForce);
     }

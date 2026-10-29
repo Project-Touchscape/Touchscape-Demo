@@ -661,8 +661,8 @@ public class HandSkeleton : MonoBehaviour
             com,
             jointPoint,
             axis);
-        drive.stiffness = 100;//fingerStiffness * axisInertia * maxStiffness;
-        drive.damping = 200;//fingerDamping * axisInertia * maxDamping;
+        drive.stiffness = fingerStiffness * axisInertia * maxStiffness;
+        drive.damping = fingerDamping * axisInertia * maxDamping;
 
 
         ArticulationReducedSpace jointPosition = body.jointPosition;
@@ -687,7 +687,8 @@ public class HandSkeleton : MonoBehaviour
         }
 
         // Updates force limit based on effective radius
-        drive.forceLimit = jointToFingertip.magnitude * palmMaxForce;
+        drive.forceLimit = Mathf.Sqrt(axisInertia / totalMass) * palmMaxForce;
+        //drive.forceLimit = jointToFingertip.magnitude * palmMaxForce;
 
         Debug.Log(
             $"fingerIndex: {fingerIndex}, jointPositionIndex: {jointPositionIndex}, " +

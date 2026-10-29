@@ -1113,11 +1113,10 @@ MonoBehaviour:
   serverAddress: 127.0.0.1
   serverPort: 8080
   forceFeedback: 1
-  collisionFeedback: 1
+  useInertiaValue: 0
   visualization: 1
   forceVisualPrefab: {fileID: 910768547617064684, guid: 2a12e6e218c663347ad7214e1fb1b21d, type: 3}
-  collisionVisualPrefab: {fileID: 0}
-  forceVisualScale: 0.01
+  forceVisualScale: 0.05
 --- !u!4 &1105916268 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 2604916979015095787, guid: 3f7511fbc40ae7a4b89c3298a3de199d, type: 3}
