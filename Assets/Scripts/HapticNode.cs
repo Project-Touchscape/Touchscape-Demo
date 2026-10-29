@@ -13,6 +13,7 @@ public class HapticNode : MonoBehaviour
     public Transform trackedTransform;
 
     public bool useInertia;
+    public float inertiaCorrection = 0.5f;
     [Range(0f, 1f)]
     public float posStiffness;
     public float posDamping;
@@ -65,6 +66,7 @@ public class HapticNode : MonoBehaviour
 
         // Calculate the force to emulate on the tracked object
         Vector3 force = forceOnTracked;
+        force += inertiaForce*inertiaCorrection;
 
         // If inertia is enabled, adds inertial force to the tracked
         if (useInertia)
@@ -72,7 +74,7 @@ public class HapticNode : MonoBehaviour
             force += inertiaForce;
         }
 
-        Debug.Log($"Force on tracked: {forceOnTracked}, Inertia force: {inertiaForce}, Resulting force: {force}");
+        Debug.Log($"Force on tracked: {force}, Inertia force: {inertiaForce}");
         
         // Clamps force to minimum
         if (force.magnitude < minOutputForce)
