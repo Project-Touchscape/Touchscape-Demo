@@ -60,19 +60,19 @@ public class HapticNode : MonoBehaviour
     }
 
     // Usually called from the physics update loop to update the wrench on the physics object
-    public void UpdateWrench(Vector3 forceOnPhysics, Vector3 torqueOnPhysics, Vector3 springComponent, Vector3 inertiaForce)
+    public void UpdateWrench(Vector3 forceOnTracked, Vector3 torqueOnTracked, Vector3 inertiaForce)
     {
 
         // Calculate the force to emulate on the tracked object
-        Vector3 force = -forceOnPhysics;
-        // Removes inertial component of physics object from the force vector
-        force += springComponent;
+        Vector3 force = forceOnTracked;
 
         // If inertia is enabled, adds inertial force to the tracked
         if (useInertia)
         {
             force += inertiaForce;
         }
+
+        Debug.Log($"Force on tracked: {forceOnTracked}, Inertia force: {inertiaForce}, Resulting force: {force}");
         
         // Clamps force to minimum
         if (force.magnitude < minOutputForce)

@@ -62,7 +62,7 @@ public class HapticRenderClient : MonoBehaviour
     }
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
-    async void Start()
+    void Start()
     {
         /*//Handles client setup
         client = new MinBiTTcpClient();
