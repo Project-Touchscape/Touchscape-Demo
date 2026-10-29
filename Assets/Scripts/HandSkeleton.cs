@@ -74,7 +74,7 @@ public class HandSkeleton : MonoBehaviour
     public float jointLogInterval = 0.5f;
     private float nextJointLogTime;*/
 
-    private HapticNode palmNode;
+    private IntegratedHapticNode palmNode;
 
     private Vector3 palmColliderOffset = new Vector3(0.0047f, -0.0043f, 0.0091f);
     private Vector3 palmColliderRot = new Vector3(5.31f, 4.947f, -0.786f);
@@ -189,8 +189,8 @@ public class HandSkeleton : MonoBehaviour
         articulationBodies.Add(rootBody);
 
         // Constructs haptic node at root 
-        if (!gameObject.TryGetComponent<HapticNode>(out palmNode))
-            palmNode = gameObject.AddComponent<HapticNode>();
+        if (!gameObject.TryGetComponent<IntegratedHapticNode>(out palmNode))
+            palmNode = gameObject.AddComponent<IntegratedHapticNode>();
         palmNode.haptics = haptics;
         palmNode.trackedTransform = trackedRoot;
         palmNode.useChainedMass = true;

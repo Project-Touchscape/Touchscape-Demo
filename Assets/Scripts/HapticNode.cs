@@ -1,8 +1,4 @@
 using System;
-using System.Net.Sockets;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -13,13 +9,13 @@ public class HapticNode : MonoBehaviour
     // HapticRenderClient script
     public HapticRenderClient haptics;
 
-    // Tracking object
+    // Tracked object
     public Transform trackedTransform;
 
-    [Tooltip("Treat the articulation hierarchy as one equivalent rigid body.")]
-    public bool useChainedMass = false;
+    // Haptic node to reference inertia from
+    public HapticNode inertiaReference;
 
-    public bool useIntertia;
+    public bool useInertia;
     [Range(0f, 1f)]
     public float posStiffness;
     public float posDamping;
@@ -29,67 +25,29 @@ public class HapticNode : MonoBehaviour
     public float minOutputForce;
     public float maxForce;
     public float maxTorque;
-    public bool visualization;
-    public GameObject forceVisualPrefab;
-    public float forceVisualScale;
-    public bool debugMode;
-    public float debugMovementSpeed;
-
-    //Tracked position
-    private Vector3 trackedPos = Vector3.zero;
-
-    //Tracked orientation
-    private Quaternion trackedRot = Quaternion.identity;
-
-    //Tracked velocity
-    private Vector3 trackedVel = Vector3.zero;
-
-    //Tracked acceleration
-    private Vector3 trackedAccel = Vector3.zero;
-
-    // Kinematics of the tracked object's local center of mass.
-    private Vector3 trackedCOMPos = Vector3.zero;
-    private Vector3 trackedCOMVel = Vector3.zero;
-    private Vector3 trackedCOMAccel = Vector3.zero;
-
-    // ArticulationBody of the physics object
-    private ArticulationBody physicsAb;
 
     // Force visualization object
     private GameObject forceVisual;
 
-    // Collision visualization object
-    private GameObject collisionVisual;
+    // Target to send inertia reference to if relevant
+    private HapticNode inertiaTarget;
 
-    // Mass of articulation body
-    private float physicsMass;
+    // Inertia force to apply if applicable
+    private Vector3 inertiaForce = Vector3.zero;
 
-    // Center of mass of articulation body (world space)
-    private Vector3 physicsCOM;
+    // Force on physics object
+    private Vector3 forceOnPhysics = Vector3.zero;
+    private Vector3 torqueOnPhysics = Vector3.zero;
+    private bool physicsUpdated = false;
 
-    // Intertial matrix of articulation body (world space)
-    private Matrix4x4 physicsInertia;
-
-    // Velocity of the equivalent body's center of mass.
-    private Vector3 physicsCOMVelocity = Vector3.zero;
-    private Vector3 prevPhysicsCOMVel = Vector3.zero;
-
-    // Center of mass relative to the root transform.
-    private Vector3 localCOM = Vector3.zero;
-
-    // Force to emulate with tracked object
-    private Vector3 forceOnTracked = Vector3.zero;
-
-    // Current collision candidate
-    private CollisionCandidate currCandidate = new CollisionCandidate();
-    private Collider physicsCollider;
+    // Wrench on inertial reference
+    private Vector3 forceOnReference = Vector3.zero;
+    private Vector3 torqueOnReference = Vector3.zero;
+    private bool referenceUpdated = false;
 
     // Maximum stiffness and damping
-    private float maxStiffness;
-    private float maxDamping;
-
-    // Data mutex
-    private object dataLock = new object();
+    protected float maxStiffness;
+    protected float maxDamping;
 
     public static IReadOnlyList<HapticNode> ActiveNodes => activeNodes;
 
@@ -105,123 +63,82 @@ public class HapticNode : MonoBehaviour
     }
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
-    void Start()
+    protected void Start()
     {
-        // Gets physics object rigidbody
-        physicsAb = gameObject.GetComponent<ArticulationBody>();
-        UpdateMassProperties();
+        if (haptics != null)
+            haptics.RegisterNode(this);
 
-        physicsCollider = gameObject.GetComponent<Collider>();
+        // Tells inertia reference that this node is its target
+        if (inertiaReference != null)
+        {
+            inertiaReference.SetInertiaTarget(this);
+        }
         // Gets maximum stiffness and damping coefficients (would bring object to rest in one frame)
         maxStiffness = 1 / Mathf.Pow(Time.fixedDeltaTime, 2);
         maxDamping = 1 / Time.fixedDeltaTime;
-
-        if (trackedTransform != null)
-        {
-            trackedPos = trackedTransform.position;
-            trackedRot = trackedTransform.rotation;
-            trackedCOMPos = trackedTransform.TransformPoint(localCOM);
-        }
 
         // Spawn force visual on tracked transform
         forceVisual = Instantiate(haptics.forceVisualPrefab, trackedTransform.position, trackedTransform.rotation);
         forceVisual.transform.SetParent(trackedTransform, true);
         forceVisual.SetActive(false);
-
-        //collisionVisual.SetActive(false);
     }
 
-    private void SetInitialMassProperties()
+    protected void SetInertiaTarget(HapticNode target)
     {
-        physicsMass = physicsAb.mass;
-        physicsCOM = physicsAb.worldCenterOfMass;
-        physicsInertia = Utils.WorldInertiaMatrix(physicsAb);
-        localCOM = physicsAb.transform.InverseTransformPoint(physicsCOM);
+        inertiaTarget = target;
     }
 
-    public void SetChainedMassProperties()
+    // Usually called from the physics update loop to update the wrench on the physics object
+    public void UpdateWrench(Vector3 forceOnPhysics, Vector3 torqueOnPhysics, Vector3 inertiaForce)
     {
-        Utils.GetChainedMassProperties(physicsAb, out float mass, out Vector3 centerOfMass, out Matrix4x4 inertia);
-        physicsMass = mass;
-        physicsCOM = centerOfMass;
-        physicsInertia = inertia;
-        localCOM = physicsAb.transform.InverseTransformPoint(physicsCOM);
-    }
+        // Updates paramters
+        this.forceOnPhysics = forceOnPhysics;
+        this.torqueOnPhysics = torqueOnPhysics;
+        this.inertiaForce = inertiaForce;
 
-    private void UpdateMassProperties()
-    {
-        if (useChainedMass)
-            SetChainedMassProperties();
-        else
-            SetInitialMassProperties();
+        physicsUpdated = true;
 
-        physicsCOMVelocity = physicsAb.linearVelocity +
-            Vector3.Cross(physicsAb.angularVelocity, physicsCOM - physicsAb.worldCenterOfMass);
-    }
-
-    void OnTriggerEnter(Collider other)
-    {
-        EvaluateTrigger(other);
-    }
-
-    void OnTriggerStay(Collider other)
-    {
-        EvaluateTrigger(other);
-    }
-
-    private void EvaluateTrigger(Collider other)
-    {
-        if (other.isTrigger || physicsCollider == null || physicsAb == null)
-            return;
-
-        if (CollisionCandidate.FromRaycast(physicsCollider, other, out CollisionCandidate candidate))
+        // Updates the inertia target if it exists
+        if (inertiaTarget != null)
         {
-            int result = currCandidate.CompareTo(candidate);
-            if (result < 0)
-                currCandidate = candidate;
-            else if (result == 0)
-                currCandidate.CombineWith(candidate);
+            inertiaTarget.UpdateInertiaReference(forceOnPhysics, torqueOnPhysics);
+        }
+        // Updates wrench if no inertia reference is set or if the reference has been updated
+        if (inertiaReference == null || referenceUpdated)
+        {
+            UpdateWrenchOnTracked();
         }
     }
 
-    // Fixed update is called once per physics frame
-    void FixedUpdate()
+    public void UpdateInertiaReference(Vector3 forceOnReference, Vector3 torqueOnReference)
     {
-        UpdateMassProperties();
+        // Updates parameters
+        this.forceOnReference = forceOnReference;
+        this.torqueOnReference = torqueOnReference;
+        referenceUpdated = true;
 
-        // Updates debug movement if debug mode is enabled
-        UpdateDebugMovement();
-        // Update kinematics of the tracked object
-        UpdateKinematics();
-        // Calculate the force and torque on the physics object
-        Vector3 forceOnPhysics = ComputeForceOnPhysics();
-        Vector3 torqueOnPhysics = ComputeTorqueOnPhysics();
-        // Trims by max force
-        if (forceOnPhysics.magnitude > maxForce)
+        // Updates wrench on tracked if physics has been updated
+        if (physicsUpdated)
         {
-            forceOnPhysics = forceOnPhysics.normalized * maxForce;
+            UpdateWrenchOnTracked();
         }
-        physicsAb.AddForce(forceOnPhysics);
+    }
 
-        // Trims by max torque
-        if (torqueOnPhysics.magnitude > maxTorque)
-        {
-            torqueOnPhysics = torqueOnPhysics.normalized * maxTorque;
-        }
-        physicsAb.AddTorque(torqueOnPhysics);
+    private void UpdateWrenchOnTracked()
+    {
+        // Clears flags
+        physicsUpdated = false;
+        referenceUpdated = false;
 
         // Calculate the force to emulate on the tracked object
         Vector3 force = -forceOnPhysics;
-        // Removes spring component of physics object from the force vector
-        force += GetSpringComponent();
+        // Removes inertial component of physics object from the force vector
+        force += forceOnReference;
 
         // If inertia is enabled, adds inertial force to the tracked
-        if (useIntertia)
+        if (useInertia)
         {
-            // Gets inertial force on tracked object
-            Vector3 inertialForce = -physicsMass * trackedCOMAccel;
-            // Adds inertial force to the force vector
-            force += inertialForce;
+            force += inertiaForce;
         }
         
         // Clamps force to minimum
@@ -230,21 +147,8 @@ public class HapticNode : MonoBehaviour
             force = Vector3.zero;
         }
 
-        SetForceOnTracked(force);
-        //Debug.Log($"Force on tracked: {force.magnitude}");
-
         // Updates force visualization
         UpdateForceVisual(force);
-
-        // Updates collision visualization
-        UpdateCollisionVisual();
-
-        // Updates previous physics velocity
-        prevPhysicsCOMVel = physicsCOMVelocity;
-
-        // Publish candidates after trigger callbacks have been evaluated for this physics step.
-        UpdateCollisionCandidate(currCandidate);
-        currCandidate = new CollisionCandidate();
     }
 
     private void UpdateForceVisual(Vector3 force)
@@ -260,349 +164,6 @@ public class HapticNode : MonoBehaviour
         else
         {
             forceVisual.SetActive(false);
-        }
-    }
-
-    private void UpdateCollisionVisual()
-    {
-        /*// If visualization is on and a collision candidate is active
-        if (haptics.visualization && currCandidate.IsValid())
-        {
-            collisionVisual.SetActive(true);
-            // Positions and orients to match collision plane
-            collisionVisual.transform.position = gameObject.transform.position + currCandidate.GetCollisionPoint();
-            collisionVisual.transform.rotation = Quaternion.FromToRotation(Vector3.up, currCandidate.GetCollisionNormal());
-        }
-        else
-        {
-            collisionVisual.SetActive(false);
-        }*/
-    }
-
-    // Update is called once per frame
-    void Update()
-    {
-    }
-
-    private void UpdateDebugMovement()
-    {
-        // Updates player movement
-        /*if (haptics.debugMode)
-        {
-            // Moves tracked object in 3d with arrow keys
-            if (Input.GetKey(KeyCode.UpArrow))
-            {
-                trackedPos += Vector3.up * Time.deltaTime * haptics.debugMovementSpeed;
-            }
-            if (Input.GetKey(KeyCode.DownArrow))
-            {
-                trackedPos += Vector3.down * Time.deltaTime * haptics.debugMovementSpeed;
-            }
-            if (Input.GetKey(KeyCode.LeftArrow))
-            {
-                trackedPos += Vector3.left * Time.deltaTime * haptics.debugMovementSpeed;
-            }
-            if (Input.GetKey(KeyCode.RightArrow))
-            {
-                trackedPos += Vector3.right * Time.deltaTime * haptics.debugMovementSpeed;
-            }
-            if (Input.GetKey(KeyCode.W))
-            {
-                trackedPos += Vector3.forward * Time.deltaTime * haptics.debugMovementSpeed;
-            }
-            if (Input.GetKey(KeyCode.S))
-            {
-                trackedPos += Vector3.back * Time.deltaTime * haptics.debugMovementSpeed;
-            }
-        }*/
-    }
-
-    private void SetForceOnTracked(Vector3 force)
-    {
-        lock (dataLock)
-        {
-            forceOnTracked = force;
-        }
-    }
-
-    public Vector3 GetForceOnTracked()
-    {
-        lock (dataLock)
-        {
-            return forceOnTracked;
-        }
-    }
-
-    public void SetTrackedPos(Vector3 pos)
-    {
-        lock (dataLock)
-        {
-            trackedPos = pos;
-        }
-    }
-
-    public Vector3 GetTrackedPos()
-    {
-        lock (dataLock)
-        {
-            return trackedPos;
-        }
-    }
-
-    public void SetTrackedRot(Quaternion rot)
-    {
-        lock (dataLock)
-        {
-            trackedRot = rot;
-        }
-    }
-
-    public Quaternion GetTrackedRot()
-    {
-        lock (dataLock)
-        {
-            return trackedRot;
-        }
-    }
-
-    private void UpdateKinematics()
-    {
-        // Position error remains based on the GameObject origin.
-        Vector3 trackedPosCopy = trackedTransform.position;
-        Vector3 prevTrackedPos = GetTrackedPos();
-        Vector3 currTrackedVel = (trackedPosCopy - prevTrackedPos) / Time.fixedDeltaTime;
-        trackedAccel = (currTrackedVel - trackedVel) / Time.fixedDeltaTime;
-
-        // Velocity and acceleration use the local center of mass.
-        Vector3 trackedCOMCopy = trackedTransform.TransformPoint(localCOM);
-        Vector3 currTrackedCOMVel = (trackedCOMCopy - trackedCOMPos) / Time.fixedDeltaTime;
-        trackedCOMAccel = (currTrackedCOMVel - trackedCOMVel) / Time.fixedDeltaTime;
-        trackedCOMPos = trackedCOMCopy;
-        trackedCOMVel = currTrackedCOMVel;
-
-        SetTrackedPos(trackedPosCopy);
-        SetTrackedRot(trackedTransform.rotation);
-        trackedVel = currTrackedVel;
-    }
-
-    private Vector3 ComputeForceOnPhysics()
-    {
-        if (posStiffness == 0 && posDamping == 0)
-        {
-            return Vector3.zero;
-        }
-        // Gets relative position and velocities of tracked and physics objects
-        Vector3 trackedPosCopy = GetTrackedPos();
-        Vector3 physicsPos = gameObject.transform.position;
-
-        Vector3 physicsVel = physicsCOMVelocity - trackedCOMVel;
-
-        Vector3 relPos = physicsPos - trackedPosCopy;
-
-        // Applies coefficients
-        Vector3 accel = -(maxStiffness * posStiffness * relPos + maxDamping * posDamping * physicsVel);
-        Vector3 force = physicsMass * accel;
-        //Print relative position and calculated force
-        //Debug.Log($"Relative position: {relPos}, force: {force}");
-
-        return force;
-    }
-
-    private Vector3 ComputeTorqueOnPhysics()
-    {
-        if (rotStiffness == 0 && rotDamping == 0)
-        {
-            return Vector3.zero;
-        }
-        // Get orientations and angular velocities
-        Quaternion trackedRotCopy = GetTrackedRot();
-        Quaternion physicsRot = gameObject.transform.rotation;
-
-        Vector3 physicsAngVel = physicsAb.angularVelocity;
-
-        // Calculate the relative rotation from tracked to physics in global coordinates
-        Vector3 relRot = Utils.AngularVelocityFromQuaternions(trackedRotCopy, physicsRot, 1);
-
-        // Applies coefficients to get necessary angular acceleration
-        Vector3 angAccel = -(maxStiffness * rotStiffness * relRot + maxDamping * rotDamping * physicsAngVel);
-        // Apply the complete world-space inertia tensor. This preserves coupling
-        // between axes when the aggregate tensor has products of inertia.
-        Vector3 torque = Utils.MultiplyInertia(physicsInertia, angAccel);
-
-        // Print relative rotation and calculated torque
-        //Debug.Log($"Relative rotation axis: {relRot.normalized}, angle: {relRot.magnitude} rad, torque: {torque}");
-
-        return torque;
-    }
-
-    private Vector3 GetSpringComponent()
-    {
-        if (posStiffness == 0 && posDamping == 0)
-        {
-            return Vector3.zero;
-        }
-        //Gets previous tracked and physics positions
-        Vector3 trackedPosCopy = GetTrackedPos();
-        Vector3 prevTrackedPos = trackedPosCopy - trackedVel * Time.fixedDeltaTime;
-        Vector3 prevPhysicsPos = gameObject.transform.position;
-
-        //Gets predicted current physics position and velocity
-        Vector3 relativeCOMVelocity = prevPhysicsCOMVel - trackedCOMVel;
-        Vector3 predPhysicsVel = -posStiffness * (prevPhysicsPos - prevTrackedPos) / Time.fixedDeltaTime + relativeCOMVelocity * (1 - posDamping);
-        Vector3 predPhysicsPos = (prevTrackedPos - prevPhysicsPos) * posStiffness + prevPhysicsPos + relativeCOMVelocity * Time.fixedDeltaTime * (1 - posDamping);
-
-        //Gets predicted (inertial) spring force
-        Vector3 predictedAccel = -(maxStiffness * posStiffness * (predPhysicsPos - trackedPosCopy) + maxDamping * posDamping * predPhysicsVel);
-        Vector3 predictedForce = physicsMass * predictedAccel;
-        return predictedForce;
-    }
-
-    public void UpdateCollisionCandidate(CollisionCandidate candidate)
-    {
-        // Sends collision candidate to haptic client if it is valid
-        if (candidate.IsValid())
-        {
-            haptics.SendCollisionCandidate(candidate);
-        }
-
-        // Updates current collision candidate using copy constructor
-        currCandidate = new CollisionCandidate(candidate);
-    }
-
-    private void OnApplicationQuit()
-    {
-        
-    }
-
-    public class CollisionCandidate
-    {
-        private Vector3 collisionPoint = Vector3.zero;
-        private Vector3 collisionNormal = Vector3.zero;
-        private Vector3 momentumChange = Vector3.zero;
-        private float timeUntilCollision;
-
-        public CollisionCandidate()
-        {
-        }
-
-        public CollisionCandidate(CollisionCandidate other)
-            : this(other.GetCollisionPoint(), other.GetCollisionNormal(),
-                other.GetMomentumChange(), other.GetTimeUntilCollision())
-        {
-        }
-
-        private CollisionCandidate(
-            Vector3 collisionPoint,
-            Vector3 collisionNormal,
-            Vector3 momentumChange,
-            float timeUntilCollision)
-        {
-            this.collisionPoint = collisionPoint;
-            this.collisionNormal = collisionNormal;
-            this.momentumChange = momentumChange;
-            this.timeUntilCollision = timeUntilCollision;
-        }
-
-        public static bool FromRaycast(Collider self, Collider other, out CollisionCandidate result)
-        {
-            Vector3 selfVelocity = self.attachedArticulationBody.linearVelocity;
-            Vector3 otherVelocity = other.attachedArticulationBody == null
-                ? Vector3.zero
-                : other.attachedArticulationBody.linearVelocity;
-            Vector3 relativeVelocity = selfVelocity - otherVelocity;
-
-            if (relativeVelocity.sqrMagnitude <= Mathf.Epsilon)
-            {
-                result = null;
-                return false;
-            }
-
-            Vector3 direction = relativeVelocity.normalized;
-            if (!other.Raycast(new Ray(self.bounds.center, direction), out RaycastHit selfToOther, Mathf.Infinity) ||
-                !self.Raycast(new Ray(selfToOther.point, -direction), out RaycastHit contactToSelf, Mathf.Infinity))
-            {
-                result = null;
-                return false;
-            }
-
-            float timeUntilCollision = contactToSelf.distance / relativeVelocity.magnitude;
-            Vector3 collisionPoint = selfVelocity * timeUntilCollision;
-            Vector3 collisionNormal = selfToOther.normal;
-            float selfMass = self.attachedArticulationBody.mass;
-            Vector3 momentumChange;
-
-            if (other.attachedArticulationBody == null)
-            {
-                momentumChange = 2f * selfMass *
-                    Vector3.Dot(relativeVelocity, collisionNormal) * collisionNormal;
-            }
-            else
-            {
-                float otherMass = other.attachedArticulationBody.mass;
-                float initialSelfVelocity = Vector3.Dot(selfVelocity, collisionNormal);
-                float initialOtherVelocity = Vector3.Dot(otherVelocity, collisionNormal);
-                float finalSelfVelocity =
-                    (2f * otherMass * initialOtherVelocity +
-                        (selfMass - otherMass) * initialSelfVelocity) /
-                    (selfMass + otherMass);
-                momentumChange = selfMass *
-                    (finalSelfVelocity - initialSelfVelocity) * collisionNormal;
-            }
-
-            result = new CollisionCandidate(
-                collisionPoint, collisionNormal, momentumChange, timeUntilCollision);
-            return true;
-        }
-
-        public float GetTimeUntilCollision()
-        {
-            return timeUntilCollision;
-        }
-
-        public Vector3 GetCollisionPoint()
-        {
-            return collisionPoint;
-        }
-
-        public Vector3 GetCollisionNormal()
-        {
-            return collisionNormal;
-        }
-
-        public Vector3 GetMomentumChange()
-        {
-            return momentumChange;
-        }
-
-        public bool IsValid()
-        {
-            return momentumChange.sqrMagnitude > 0f;
-        }
-
-        public int CompareTo(CollisionCandidate other)
-        {
-            if (!IsValid())
-                return -1;
-            if (!other.IsValid())
-                return 1;
-
-            float time = GetTimeUntilCollision();
-            float otherTime = other.GetTimeUntilCollision();
-            if (otherTime >= 2f * time)
-                return 1;
-            if (time >= 2f * otherTime)
-                return -1;
-            return 0;
-        }
-
-        public void CombineWith(CollisionCandidate other)
-        {
-            momentumChange += other.GetMomentumChange();
-            if (other.GetTimeUntilCollision() < GetTimeUntilCollision())
-            {
-                timeUntilCollision = other.GetTimeUntilCollision();
-                collisionPoint = other.GetCollisionPoint();
-            }
         }
     }
 }

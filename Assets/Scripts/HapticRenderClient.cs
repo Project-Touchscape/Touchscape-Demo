@@ -17,8 +17,21 @@ public class HapticRenderClient : MonoBehaviour
     // Whether force feedback is sent to server
     public bool forceFeedback = true;
 
-    // Whether collision feedback is sent to server
-    public bool collisionFeedback = true;
+    // Whether inertia is enabled for all nodes registered with this client
+    [SerializeField] private bool useInertiaValue;
+
+    public bool useInertia
+    {
+        get => useInertiaValue;
+        set
+        {
+            if (useInertiaValue == value)
+                return;
+
+            useInertiaValue = value;
+            SyncInertiaToNodes();
+        }
+    }
 
     // Whether visualization is enabled
     public bool visualization = false;
@@ -26,16 +39,8 @@ public class HapticRenderClient : MonoBehaviour
     // Force visualization object
     public GameObject forceVisualPrefab;
 
-    // Collision visualization object
-    public GameObject collisionVisualPrefab;
-
     // Force visualization scale factor
     public float forceVisualScale = 100;
-
-    private MinBiTTcpClient client;
-
-    // Mutex
-    private object commLock = new object();
 
     public enum Headers
     {
@@ -55,13 +60,6 @@ public class HapticRenderClient : MonoBehaviour
         // NACK: 0 bytes
         NACK = 0x2
     }
-
-    // Haptic node script attached to node object
-    private HapticNode node;
-
-    private bool previousVisualization;
-    private float previousForceVisualScale;
-    private bool settingsInitialized;
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     async void Start()
@@ -87,7 +85,7 @@ public class HapticRenderClient : MonoBehaviour
 
     private void PollServer()
     {
-        lock (commLock)
+        /*lock (commLock)
         {
             // Send feedback to the server
             if (forceFeedback)
@@ -100,9 +98,10 @@ public class HapticRenderClient : MonoBehaviour
             client.writeRequest((byte)Headers.SEND_NODE_DATA);
             client.sendAll();
         }
+        */
     }
 
-    private void ReadHandler(MinBiTTcpClient client, MinBiTTcpClient.Request request) {
+    /*private void ReadHandler(MinBiTTcpClient client, MinBiTTcpClient.Request request) {
         if (request.IsTimedOut())
         {
             return;
@@ -145,12 +144,13 @@ public class HapticRenderClient : MonoBehaviour
                     }
                     break;
                 }
-        }
+        }s
     }
+    */
 
-    public void SendCollisionCandidate(HapticNode.CollisionCandidate candidate)
+    /*public void SendCollisionCandidate(HapticNode.CollisionCandidate candidate)
     {
-        /*if (collisionFeedback)
+        if (collisionFeedback)
         {
             lock (commLock)
             {
@@ -161,8 +161,9 @@ public class HapticRenderClient : MonoBehaviour
                 client.writeFloat(candidate.GetTimeUntilCollision());
                 client.sendAll();
             }
-        }*/
+        }
     }
+    */
 
     // Fixed update is called once per physics frame
     void FixedUpdate()
@@ -174,6 +175,26 @@ public class HapticRenderClient : MonoBehaviour
     void Update()
     {
         
+    }
+
+    internal void RegisterNode(HapticNode node)
+    {
+        if (node != null && node.haptics == this)
+            node.useInertia = useInertiaValue;
+    }
+
+    private void SyncInertiaToNodes()
+    {
+        foreach (HapticNode node in HapticNode.ActiveNodes)
+        {
+            if (node != null && node.haptics == this)
+                node.useInertia = useInertiaValue;
+        }
+    }
+
+    private void OnValidate()
+    {
+        SyncInertiaToNodes();
     }
 
     private Vector3 hardwareToUnityForce(Vector3 force)
@@ -215,6 +236,6 @@ public class HapticRenderClient : MonoBehaviour
     private void OnApplicationQuit()
     {
         // Clean up resources when the application quits
-        client.Close();
+        //client.Close();
     }
 }
