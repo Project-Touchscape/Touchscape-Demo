@@ -12,9 +12,6 @@ public class HapticNode : MonoBehaviour
     // Tracked object
     public Transform trackedTransform;
 
-    // Haptic node to reference inertia from
-    public HapticNode inertiaReference;
-
     public bool useInertia;
     [Range(0f, 1f)]
     public float posStiffness;
@@ -28,22 +25,6 @@ public class HapticNode : MonoBehaviour
 
     // Force visualization object
     private GameObject forceVisual;
-
-    // Target to send inertia reference to if relevant
-    private HapticNode inertiaTarget;
-
-    // Inertia force to apply if applicable
-    private Vector3 inertiaForce = Vector3.zero;
-
-    // Force on physics object
-    private Vector3 forceOnPhysics = Vector3.zero;
-    private Vector3 torqueOnPhysics = Vector3.zero;
-    private bool physicsUpdated = false;
-
-    // Wrench on inertial reference
-    private Vector3 forceOnReference = Vector3.zero;
-    private Vector3 torqueOnReference = Vector3.zero;
-    private bool referenceUpdated = false;
 
     // Maximum stiffness and damping
     protected float maxStiffness;
@@ -68,11 +49,6 @@ public class HapticNode : MonoBehaviour
         if (haptics != null)
             haptics.RegisterNode(this);
 
-        // Tells inertia reference that this node is its target
-        if (inertiaReference != null)
-        {
-            inertiaReference.SetInertiaTarget(this);
-        }
         // Gets maximum stiffness and damping coefficients (would bring object to rest in one frame)
         maxStiffness = 1 / Mathf.Pow(Time.fixedDeltaTime, 2);
         maxDamping = 1 / Time.fixedDeltaTime;
@@ -83,57 +59,14 @@ public class HapticNode : MonoBehaviour
         forceVisual.SetActive(false);
     }
 
-    protected void SetInertiaTarget(HapticNode target)
-    {
-        inertiaTarget = target;
-    }
-
     // Usually called from the physics update loop to update the wrench on the physics object
-    public void UpdateWrench(Vector3 forceOnPhysics, Vector3 torqueOnPhysics, Vector3 inertiaForce)
+    public void UpdateWrench(Vector3 forceOnPhysics, Vector3 torqueOnPhysics, Vector3 springComponent, Vector3 inertiaForce)
     {
-        // Updates paramters
-        this.forceOnPhysics = forceOnPhysics;
-        this.torqueOnPhysics = torqueOnPhysics;
-        this.inertiaForce = inertiaForce;
-
-        physicsUpdated = true;
-
-        // Updates the inertia target if it exists
-        if (inertiaTarget != null)
-        {
-            inertiaTarget.UpdateInertiaReference(forceOnPhysics, torqueOnPhysics);
-        }
-        // Updates wrench if no inertia reference is set or if the reference has been updated
-        if (inertiaReference == null || referenceUpdated)
-        {
-            UpdateWrenchOnTracked();
-        }
-    }
-
-    public void UpdateInertiaReference(Vector3 forceOnReference, Vector3 torqueOnReference)
-    {
-        // Updates parameters
-        this.forceOnReference = forceOnReference;
-        this.torqueOnReference = torqueOnReference;
-        referenceUpdated = true;
-
-        // Updates wrench on tracked if physics has been updated
-        if (physicsUpdated)
-        {
-            UpdateWrenchOnTracked();
-        }
-    }
-
-    private void UpdateWrenchOnTracked()
-    {
-        // Clears flags
-        physicsUpdated = false;
-        referenceUpdated = false;
 
         // Calculate the force to emulate on the tracked object
         Vector3 force = -forceOnPhysics;
         // Removes inertial component of physics object from the force vector
-        force += forceOnReference;
+        force += springComponent;
 
         // If inertia is enabled, adds inertial force to the tracked
         if (useInertia)

@@ -128,8 +128,9 @@ public class IntegratedHapticNode : HapticNode
 
         // Gets inertia force to apply if applicable
         Vector3 inertiaForce = -physicsMass * trackedCOMAccel;
-
-        UpdateWrench(newForceOnPhysics, newTorqueOnPhysics, inertiaForce);
+        // Gets spring component of the force on the physics object
+        Vector3 springComponent = GetSpringComponent();
+        UpdateWrench(newForceOnPhysics, newTorqueOnPhysics, springComponent,inertiaForce);
 
         // Updates previous physics velocity
         prevPhysicsCOMVel = physicsCOMVelocity;
