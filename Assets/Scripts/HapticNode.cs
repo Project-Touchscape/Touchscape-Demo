@@ -56,14 +56,6 @@ public class HapticNode : MonoBehaviour
         if (initialized)
             return;
 
-        if (haptics != null)
-            haptics.RegisterNode(this);
-        else
-        {
-            Debug.LogError($"[{name}] HapticNode requires a HapticRenderClient reference.");
-            return;
-        }
-
         // Gets maximum stiffness and damping coefficients (would bring object to rest in one frame)
         maxStiffness = 1 / Mathf.Pow(Time.fixedDeltaTime, 2);
         maxDamping = 1 / Time.fixedDeltaTime;

@@ -169,26 +169,6 @@ public class HapticRenderClient : MonoBehaviour
         
     }
 
-    internal void RegisterNode(HapticNode node)
-    {
-        if (node != null && node.haptics == this)
-            node.useInertia = useInertiaValue;
-    }
-
-    private void SyncInertiaToNodes()
-    {
-        foreach (HapticNode node in HapticNode.ActiveNodes)
-        {
-            if (node != null && node.haptics == this)
-                node.useInertia = useInertiaValue;
-        }
-    }
-
-    private void OnValidate()
-    {
-        SyncInertiaToNodes();
-    }
-
     private Vector3 hardwareToUnityForce(Vector3 force)
     {
         // Convert from Cartesian coordinates to Unity coordinates

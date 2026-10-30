@@ -418,7 +418,6 @@ public class HandSkeleton : MonoBehaviour
 
             node.haptics = haptics;
             node.trackedTransform = trackedJoint;
-            node.useInertia = false;
             fingertipNodes[fingerIndex] = node;
         }
     }
