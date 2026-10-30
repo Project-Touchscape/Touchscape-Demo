@@ -162,7 +162,7 @@ public class HandSkeleton : MonoBehaviour
             rootBody = gameObject.AddComponent<ArticulationBody>();
         }
 
-        rootBody.mass = palmMass;
+        rootBody.mass = Mathf.Epsilon;
         rootBody.immovable = false;
         rootBody.useGravity = useGravity;
         rootBody.solverIterations = 60;
@@ -182,20 +182,6 @@ public class HandSkeleton : MonoBehaviour
         // Normalizes max force by total mass
         palmNode.maxPhysicsForce = palmMaxForce;
         palmNode.maxPhysicsTorque = palmMaxTorque;
-
-        // Adds fixed articulation body to palm object
-        ArticulationBody palmBody = palm.GetComponent<ArticulationBody>();
-        if (palmBody == null)
-        {
-            palmBody = palm.AddComponent<ArticulationBody>();
-        }
-        palmBody.mass = perBoneMass * 3f;
-        palmBody.useGravity = useGravity;
-        palmBody.solverIterations = 60;
-        palmBody.solverVelocityIterations = 20;
-        palmBody.jointType = ArticulationJointType.FixedJoint;
-        palmBody.collisionDetectionMode = CollisionDetectionMode.Continuous;
-        articulationBodies.Add(palmBody);
 
         // The collider must be added to a child object to allow rotation.
         Transform existingPalmCollider =
@@ -232,6 +218,20 @@ public class HandSkeleton : MonoBehaviour
         // Always apply the configured hand material, including when the collider
         // was already present on the child.
         palmCollider.material = material;
+
+        // Adds fixed articulation body to palm child object
+        ArticulationBody palmBody = palmChild.GetComponent<ArticulationBody>();
+        if (palmBody == null)
+        {
+            palmBody = palmChild.AddComponent<ArticulationBody>();
+        }
+        palmBody.mass = perBoneMass * 3f;
+        palmBody.useGravity = useGravity;
+        palmBody.solverIterations = 60;
+        palmBody.solverVelocityIterations = 20;
+        palmBody.jointType = ArticulationJointType.FixedJoint;
+        palmBody.collisionDetectionMode = CollisionDetectionMode.Continuous;
+        articulationBodies.Add(palmBody);
     }
 
     private void ConstructFingers()
