@@ -89,16 +89,16 @@ public class IntegratedHapticNode : HapticNode
         Vector3 newTorqueOnPhysics = ComputeTorqueOnPhysics();
 
         // Trims by max force
-        if (newForceOnPhysics.magnitude > maxForce)
+        if (newForceOnPhysics.magnitude > maxPhysicsForce)
         {
-            newForceOnPhysics = newForceOnPhysics.normalized * maxForce;
+            newForceOnPhysics = newForceOnPhysics.normalized * maxPhysicsForce;
         }
         physicsAb.AddForce(newForceOnPhysics);
 
         // Trims by max torque
-        if (newTorqueOnPhysics.magnitude > maxTorque)
+        if (newTorqueOnPhysics.magnitude > maxPhysicsTorque)
         {
-            newTorqueOnPhysics = newTorqueOnPhysics.normalized * maxTorque;
+            newTorqueOnPhysics = newTorqueOnPhysics.normalized * maxPhysicsTorque;
         }
         physicsAb.AddTorque(newTorqueOnPhysics);
 
@@ -258,13 +258,13 @@ public class IntegratedHapticNode : HapticNode
             Debug.LogError($"[{name}] Non-finite control output detected.");
         }
 
-        if (forceOnPhysics.magnitude > maxForce ||
-            torqueOnPhysics.magnitude > maxTorque)
+        if (forceOnPhysics.magnitude > maxPhysicsForce ||
+            torqueOnPhysics.magnitude > maxPhysicsTorque)
         {
             Debug.LogWarning(
                 $"[{name}] Control output exceeds configured limits. " +
-                $"force={forceOnPhysics.magnitude:F6}/{maxForce:F6}, " +
-                $"torque={torqueOnPhysics.magnitude:F6}/{maxTorque:F6}. " +
+                $"force={forceOnPhysics.magnitude:F6}/{maxPhysicsForce:F6}, " +
+                $"torque={torqueOnPhysics.magnitude:F6}/{maxPhysicsTorque:F6}. " +
                 "The runtime clamps are currently disabled.");
         }
 

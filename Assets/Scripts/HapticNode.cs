@@ -12,7 +12,6 @@ public class HapticNode : MonoBehaviour
     // Tracked object
     public Transform trackedTransform;
 
-    public bool useInertia;
     [Range(0f, 1f)]
     public float posStiffness;
     [Range(0f, 1f)]
@@ -22,8 +21,8 @@ public class HapticNode : MonoBehaviour
     [Range(0f, 1f)]
     public float rotDamping;
     public float minOutputForce;
-    public float maxForce;
-    public float maxTorque;
+    public float maxPhysicsForce;
+    public float maxPhysicsTorque;
 
     // Force visualization object
     private GameObject forceVisual;
@@ -97,13 +96,13 @@ public class HapticNode : MonoBehaviour
         Vector3 force = forceOnTracked;
 
         // If inertia is enabled, adds inertial force to the tracked
-        if (useInertia)
+        if (haptics.useInertia)
         {
             force += inertiaForce;
         }
 
-        // Clamps force to minimum
-        if (force.magnitude < minOutputForce)
+        // Clamps force to minimum and maximum
+        if (force.magnitude < haptics.minOutputForce)
         {
             force = Vector3.zero;
         }

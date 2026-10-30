@@ -20,18 +20,7 @@ public class HapticRenderClient : MonoBehaviour
     // Whether inertia is enabled for all nodes registered with this client
     [SerializeField] private bool useInertiaValue;
 
-    public bool useInertia
-    {
-        get => useInertiaValue;
-        set
-        {
-            if (useInertiaValue == value)
-                return;
-
-            useInertiaValue = value;
-            SyncInertiaToNodes();
-        }
-    }
+    public bool useInertia = false;
 
     // Whether visualization is enabled
     public bool visualization = false;
@@ -41,6 +30,9 @@ public class HapticRenderClient : MonoBehaviour
 
     // Force visualization scale factor
     public float forceVisualScale = 100;
+
+    // Minimum output force for haptic feedback
+    public float minOutputForce;
 
     public enum Headers
     {

@@ -64,6 +64,8 @@ public class HandSkeleton : MonoBehaviour
     
     public float fingerDamping = 1f;
 
+    public float fingerMaxTorque = 40f;
+
     /*[Header("Joint Debug")]
     public bool logSplayJoint = false;
     [Min(0)]
@@ -76,11 +78,18 @@ public class HandSkeleton : MonoBehaviour
 
     private IntegratedHapticNode palmNode;
     private HapticNode[] fingertipNodes = new HapticNode[N_FINGERS];
-    private Vector3[] previousFingertipVelocities = new Vector3[N_FINGERS];
-    private Vector3[] previousFingertipControllerForces = new Vector3[N_FINGERS];
-    private Vector3[] fingertipControllerForces = new Vector3[N_FINGERS];
-    private float[] fingertipMasses = new float[N_FINGERS];
-    private Vector3[] fingertipMomenta = new Vector3[N_FINGERS];
+    private float[] previousJointAngularMomenta =
+        new float[N_FINGERS * N_ACTIVE_BONES * 2];
+    private float[] jointAngularMomenta =
+        new float[N_FINGERS * N_ACTIVE_BONES * 2];
+    private float[] previousJointControllerTorques =
+        new float[N_FINGERS * N_ACTIVE_BONES * 2];
+    private float[] jointControllerTorques =
+        new float[N_FINGERS * N_ACTIVE_BONES * 2];
+    private Vector3[] jointJacobianLinear =
+        new Vector3[N_FINGERS * N_ACTIVE_BONES * 2];
+    private Vector3[] jointJacobianAngular =
+        new Vector3[N_FINGERS * N_ACTIVE_BONES * 2];
     private bool[] initializedFingertipKinematics = new bool[N_FINGERS];
 
     private Vector3 palmColliderOffset = new Vector3(0.0047f, -0.0043f, 0.0091f);
@@ -142,9 +151,8 @@ public class HandSkeleton : MonoBehaviour
         }
 
         int jointID = 0;
-        System.Array.Clear(fingertipMasses, 0, fingertipMasses.Length);
-        System.Array.Clear(fingertipMomenta, 0, fingertipMomenta.Length);
-        System.Array.Clear(fingertipControllerForces, 0, fingertipControllerForces.Length);
+        System.Array.Clear(jointAngularMomenta, 0, jointAngularMomenta.Length);
+        System.Array.Clear(jointControllerTorques, 0, jointControllerTorques.Length);
         // Update the articulation bodies' target angles based on the tracked joint rotations
         for (int fingerIndex = 0; fingerIndex < Mathf.Min(N_FINGERS, fingers.Length); fingerIndex++)
         {
@@ -177,8 +185,8 @@ public class HandSkeleton : MonoBehaviour
             palmNode.posDamping = palmPosDamping;
             palmNode.rotStiffness = palmRotStiffness;
             palmNode.rotDamping = palmRotDamping;
-            palmNode.maxForce = palmMaxForce;
-            palmNode.maxTorque = palmMaxTorque;
+            palmNode.maxPhysicsForce = palmMaxForce;
+            palmNode.maxPhysicsTorque = palmMaxTorque;
         }
     }
 
@@ -209,8 +217,8 @@ public class HandSkeleton : MonoBehaviour
         palmNode.rotStiffness = palmRotStiffness;
         palmNode.rotDamping = palmRotDamping;
         // Normalizes max force by total mass
-        palmNode.maxForce = palmMaxForce;
-        palmNode.maxTorque = palmMaxTorque;
+        palmNode.maxPhysicsForce = palmMaxForce;
+        palmNode.maxPhysicsTorque = palmMaxTorque;
 
         // Adds fixed articulation body to palm object
         ArticulationBody palmBody = palm.GetComponent<ArticulationBody>();
@@ -489,9 +497,6 @@ public class HandSkeleton : MonoBehaviour
             return;
         }
 
-        fingertipMasses[fingerIndex] += body.mass;
-        fingertipMomenta[fingerIndex] += body.mass * body.linearVelocity;
-
         if (dof > 0)
         {
             // Measure the tracked bones around the physics joint's local X axis. The
@@ -661,9 +666,10 @@ public class HandSkeleton : MonoBehaviour
             com,
             jointPoint,
             axis);
+
         drive.stiffness = fingerStiffness * axisInertia * maxStiffness;
         drive.damping = fingerDamping * axisInertia * maxDamping;
-
+        drive.forceLimit = fingerMaxTorque;
 
         ArticulationReducedSpace jointPosition = body.jointPosition;
         float currentPhysicsAngle =
@@ -674,28 +680,68 @@ public class HandSkeleton : MonoBehaviour
             - drive.damping * Vector3.Dot(body.angularVelocity, axis);
 
         HapticNode fingertipNode = fingertipNodes[fingerIndex];
-        Vector3 jointToFingertip =
-            fingertipNode.transform.position - jointPoint;
-        if (jointToFingertip.sqrMagnitude > Mathf.Epsilon)
+        if (fingertipNode != null)
         {
-            Vector3 torque = axis * driveTorque;
-            Vector3 fingertipForce =
-                Vector3.Cross(torque, jointToFingertip)
-                / jointToFingertip.sqrMagnitude;
-            fingertipControllerForces[fingerIndex] +=
-                fingertipForce;
+            Vector3 jointToFingertip =
+                fingertipNode.transform.position - jointPoint;
+            ComputeFingertipJacobianColumn(
+                axis,
+                jointPoint,
+                fingertipNode.transform.position,
+                out Vector3 linearJacobian,
+                out Vector3 angularJacobian);
+            int jacobianIndex = GetJointAxisIndex(
+                fingerIndex,
+                body,
+                jointPositionIndex);
+            jointJacobianLinear[jacobianIndex] = linearJacobian;
+            jointJacobianAngular[jacobianIndex] = angularJacobian;
+            jointAngularMomenta[jacobianIndex] =
+                axisInertia * Vector3.Dot(body.angularVelocity, axis);
+            jointControllerTorques[jacobianIndex] = driveTorque;
         }
 
-        // Updates force limit based on effective radius
-        drive.forceLimit = Mathf.Sqrt(axisInertia / totalMass) * palmMaxForce;
-        //drive.forceLimit = jointToFingertip.magnitude * palmMaxForce;
+        // Do not limit the drive torque based on the fingertip lever arm. That
+        // converts a desired fingertip force into a torque cap and can prevent
+        // the joint from reaching its target when the lever arm is short.
 
         Debug.Log(
             $"fingerIndex: {fingerIndex}, jointPositionIndex: {jointPositionIndex}, " +
-            $"axisInertia: {axisInertia:F3}, totalMass: {totalMass:F3}, com: {com}, jointPoint: {jointPoint}, " +
-            $"targetAngle: {targetAngle:F3}, currentPhysicsAngle: {currentPhysicsAngle:F3}, angularError: {angularError:F3}, driveTorque: {driveTorque:F3}");
+            $"axisInertia: {axisInertia:F8}, totalMass: {totalMass:F3}, com: {com}, jointPoint: {jointPoint}, " +
+            $"targetAngle: {targetAngle:F3}, currentPhysicsAngle: {currentPhysicsAngle:F3}, " +
+            $"angularError: {angularError:F3}, driveTorque: {driveTorque:F3}, " +
+            $"driveForceLimit: {drive.forceLimit:F3}");
         
         return drive;
+    }
+
+    private void ComputeFingertipJacobianColumn(
+        Vector3 jointAxis,
+        Vector3 jointPoint,
+        Vector3 fingertipPosition,
+        out Vector3 linearColumn,
+        out Vector3 angularColumn)
+    {
+        Vector3 jointToFingertip = fingertipPosition - jointPoint;
+        linearColumn = Vector3.Cross(jointAxis, jointToFingertip);
+        angularColumn = jointAxis;
+    }
+
+    private int GetJointAxisIndex(
+        int fingerIndex,
+        ArticulationBody body,
+        int jointPositionIndex)
+    {
+        int jointIndex = 0;
+        Transform currentJoint = fingers[fingerIndex].transform;
+        while (currentJoint != body.transform && currentJoint.childCount > 0)
+        {
+            currentJoint = currentJoint.GetChild(0);
+            jointIndex++;
+        }
+
+        return (fingerIndex * N_ACTIVE_BONES + jointIndex) * 2
+            + jointPositionIndex;
     }
 
     private void UpdateFingertipWrench(
@@ -706,30 +752,46 @@ public class HandSkeleton : MonoBehaviour
         if (node == null)
             return;
 
-        float timeStep = Time.fixedDeltaTime;
-        float fingertipMass = fingertipMasses[fingerIndex];
-        if (fingertipMass <= Mathf.Epsilon)
-            return;
-
-        Vector3 fingertipVelocity =
-            fingertipMomenta[fingerIndex] / fingertipMass;
-        Vector3 fingertipAcceleration = initializedFingertipKinematics[fingerIndex]
-            ? (fingertipVelocity - previousFingertipVelocities[fingerIndex]) / timeStep
-            : Vector3.zero;
-
-        Vector3 externalForce =
-            fingertipMass * fingertipAcceleration
-            - previousFingertipControllerForces[fingerIndex];
+        Vector3 externalForce = Vector3.zero;
+        if (initializedFingertipKinematics[fingerIndex])
+        {
+            float timeStep = Time.fixedDeltaTime;
+            for (int jointIndex = 0; jointIndex < N_ACTIVE_BONES; jointIndex++)
+            {
+                for (int axisIndex = 0; axisIndex < 2; axisIndex++)
+                {
+                    int jacobianIndex =
+                        (fingerIndex * N_ACTIVE_BONES + jointIndex) * 2
+                        + axisIndex;
+                    float externalTorque =
+                        (jointAngularMomenta[jacobianIndex]
+                        - previousJointAngularMomenta[jacobianIndex])
+                        / timeStep
+                        - previousJointControllerTorques[jacobianIndex];
+                    Vector3 linearJacobian =
+                        jointJacobianLinear[jacobianIndex];
+                    if (linearJacobian.sqrMagnitude > Mathf.Epsilon)
+                    {
+                        externalForce += linearJacobian *
+                            (externalTorque / linearJacobian.sqrMagnitude);
+                    }
+                }
+            }
+        }
 
         node.UpdateWrench(
             -externalForce,
             Vector3.zero,
             Vector3.zero);
 
-        previousFingertipVelocities[fingerIndex] = fingertipVelocity;
-        previousFingertipControllerForces[fingerIndex] =
-            fingertipControllerForces[fingerIndex];
-        fingertipControllerForces[fingerIndex] = Vector3.zero;
+        int firstIndex = fingerIndex * N_ACTIVE_BONES * 2;
+        for (int axisIndex = 0; axisIndex < N_ACTIVE_BONES * 2; axisIndex++)
+        {
+            previousJointAngularMomenta[firstIndex + axisIndex] =
+                jointAngularMomenta[firstIndex + axisIndex];
+            previousJointControllerTorques[firstIndex + axisIndex] =
+                jointControllerTorques[firstIndex + axisIndex];
+        }
         initializedFingertipKinematics[fingerIndex] = true;
     }
 }
