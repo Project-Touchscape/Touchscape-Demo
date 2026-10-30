@@ -208,4 +208,14 @@ public static class Utils
         return body.transform.TransformDirection(
             body.anchorRotation * Vector3.up).normalized;
     }
+
+    public static float GetMaxStiffness()
+    {
+        return 1 / Mathf.Pow(Time.fixedDeltaTime, 2);
+    }
+
+    public static float GetMaxDamping()
+    {
+        return 1 / Time.fixedDeltaTime;
+    }
 }

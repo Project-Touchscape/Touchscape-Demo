@@ -28,10 +28,6 @@ public class HapticNode : MonoBehaviour
     private GameObject forceVisual;
     private bool initialized;
 
-    // Maximum stiffness and damping
-    protected float maxStiffness;
-    protected float maxDamping;
-
     public static IReadOnlyList<HapticNode> ActiveNodes => activeNodes;
 
     void OnEnable()
@@ -55,10 +51,6 @@ public class HapticNode : MonoBehaviour
     {
         if (initialized)
             return;
-
-        // Gets maximum stiffness and damping coefficients (would bring object to rest in one frame)
-        maxStiffness = 1 / Mathf.Pow(Time.fixedDeltaTime, 2);
-        maxDamping = 1 / Time.fixedDeltaTime;
 
         // Spawn force visual on tracked transform
         if (trackedTransform == null)

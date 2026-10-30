@@ -155,8 +155,8 @@ public class IntegratedHapticNode : HapticNode
         Vector3 relPos = physicsAb.transform.position - trackedPosition;
 
         Vector3 accel =
-            -(maxStiffness * posStiffness * relPos
-            + maxDamping * posDamping * physicsAb.linearVelocity);
+            -(Utils.GetMaxStiffness() * posStiffness * relPos
+            + Utils.GetMaxDamping() * posDamping * physicsAb.linearVelocity);
         Vector3 force = physicsMass * accel;
         //Print relative position and calculated force
         //Debug.Log($"Relative position: {relPos}, force: {force}");
@@ -183,8 +183,8 @@ public class IntegratedHapticNode : HapticNode
             1);
 
         Vector3 angAccel =
-            -(maxStiffness * rotStiffness * relRot
-            + maxDamping * rotDamping * physicsAngVel);
+            -(Utils.GetMaxStiffness() * rotStiffness * relRot
+            + Utils.GetMaxDamping() * rotDamping * physicsAngVel);
         // Apply the complete world-space inertia tensor. This preserves coupling
         // between axes when the aggregate tensor has products of inertia.
         Vector3 torque = Utils.MultiplyInertia(physicsInertia, angAccel);
@@ -222,8 +222,8 @@ public class IntegratedHapticNode : HapticNode
         Vector3 relPos = physicsAb.transform.position - trackedTransform.position;
         Vector3 dampingVelocity = physicsVel;
         Vector3 controlAcceleration =
-            -(maxStiffness * posStiffness * relPos
-            + maxDamping * posDamping * dampingVelocity);
+            -(Utils.GetMaxStiffness() * posStiffness * relPos
+            + Utils.GetMaxDamping() * posDamping * dampingVelocity);
         float relativePositionDot =
             hasPreviousRelativePosition
                 ? Vector3.Dot(previousRelativePosition, relPos)
