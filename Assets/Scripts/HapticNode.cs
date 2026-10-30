@@ -72,27 +72,24 @@ public class HapticNode : MonoBehaviour
     }
 
     // Usually called from the physics update loop to update the wrench on the physics object
-    public void UpdateState(Vector3 forceOnTracked, Vector3 inertiaForce)
+    public void UpdateState(Vector3 physicsForce, Vector3 inertiaForce)
     {
         Initialize();
 
-        // Calculate the force to emulate on the tracked object
-        Vector3 force = forceOnTracked;
-
-        // If inertia is enabled, adds inertial force to the tracked
-        if (haptics.useInertia)
+        // If inertia is not enabled, subtracts the inertia force from the physics force
+        if (!haptics.useInertia)
         {
-            force += inertiaForce;
+            physicsForce -= inertiaForce;
         }
 
         // Clamps force to minimum and maximum
-        if (force.magnitude < haptics.minOutputForce)
+        if (physicsForce.magnitude < haptics.minOutputForce)
         {
-            force = Vector3.zero;
+            physicsForce = Vector3.zero;
         }
 
         // Updates force visualization
-        UpdateForceVisual(force);
+        UpdateForceVisual(physicsForce);
     }
 
     private void UpdateForceVisual(Vector3 force)

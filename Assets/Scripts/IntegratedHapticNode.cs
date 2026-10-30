@@ -35,7 +35,7 @@ public class IntegratedHapticNode : HapticNode
     private Vector3 physicsVel = Vector3.zero;
     private Vector3 prevPhysicsVel = Vector3.zero;
     private Vector3 physicsAccel = Vector3.zero;
-    private Vector3 previousForceOnPhysics = Vector3.zero;
+    private Vector3 prevPhysicsForce = Vector3.zero;
     private float nextDiagnosticsTime;
     private int fixedStep;
     private Vector3 previousRelativePosition = Vector3.zero;
@@ -76,7 +76,7 @@ public class IntegratedHapticNode : HapticNode
     }
 
     // Fixed update is called once per physics frame
-    protected void FixedUpdate()
+    public void UpdatePhysics()
     {
         fixedStep++;
         UpdateMassProperties();
@@ -84,33 +84,30 @@ public class IntegratedHapticNode : HapticNode
         // Update kinematics of the tracked object
         UpdateKinematics();
         // Calculate the force and torque on the physics object
-        Vector3 newForceOnPhysics = ComputeForceOnPhysics();
-        Vector3 newTorqueOnPhysics = ComputeTorqueOnPhysics();
+        Vector3 newPhysicsForce = ComputeForceOnPhysics();
+        Vector3 newPhysicsTorque = ComputeTorqueOnPhysics();
 
         // Trims by max force
-        if (newForceOnPhysics.magnitude > maxPhysicsForce)
+        if (newPhysicsForce.magnitude > maxPhysicsForce)
         {
-            newForceOnPhysics = newForceOnPhysics.normalized * maxPhysicsForce;
+            newPhysicsForce = newPhysicsForce.normalized * maxPhysicsForce;
         }
-        physicsAb.AddForce(newForceOnPhysics);
+        physicsAb.AddForce(newPhysicsForce);
 
         // Trims by max torque
-        if (newTorqueOnPhysics.magnitude > maxPhysicsTorque)
+        if (newPhysicsTorque.magnitude > maxPhysicsTorque)
         {
-            newTorqueOnPhysics = newTorqueOnPhysics.normalized * maxPhysicsTorque;
+            newPhysicsTorque = newPhysicsTorque.normalized * maxPhysicsTorque;
         }
-        physicsAb.AddTorque(newTorqueOnPhysics);
+        physicsAb.AddTorque(newPhysicsTorque);
 
-        previousForceOnPhysics = newForceOnPhysics;
+        // Updates haptic node state
+        Vector3 inertiaForce = -physicsMass * physicsAccel;
+        UpdateState(-prevPhysicsForce, inertiaForce);
 
-        // Gets inertia force to apply if applicable
-        Vector3 inertiaForce = -physicsMass * trackedAccel;
-        // Gets accurate force to apply on tracked object
-        Vector3 externalForce =
-            physicsMass * physicsAccel - previousForceOnPhysics;
-        UpdateState(externalForce, inertiaForce);
+        LogDiagnostics(newPhysicsForce, newPhysicsTorque, inertiaForce);
 
-        //LogDiagnostics(newForceOnPhysics, newTorqueOnPhysics, trackedForce, inertiaForce);
+        prevPhysicsForce = newPhysicsForce;
     }
 
     // Update is called once per frame
@@ -141,21 +138,18 @@ public class IntegratedHapticNode : HapticNode
 
     private Vector3 ComputeForceOnPhysics()
     {
-        return ComputeForceOnPhysics(trackedTransform.position);
-    }
-
-    private Vector3 ComputeForceOnPhysics(Vector3 trackedPosition)
-    {
         if (posStiffness == 0)
         {
             return Vector3.zero;
         }
 
-        Vector3 relPos = physicsAb.transform.position - trackedPosition;
+        Vector3 relPos = physicsAb.transform.position - trackedPos;
+
+        Vector3 relVel = physicsAb.linearVelocity - trackedVel;
 
         Vector3 accel =
             -(Utils.GetMaxStiffness() * posStiffness * relPos
-            + Utils.GetMaxDamping() * posDamping * physicsAb.linearVelocity);
+            + Utils.GetMaxDamping() * posDamping * relVel);
         Vector3 force = physicsMass * accel;
         //Print relative position and calculated force
         //Debug.Log($"Relative position: {relPos}, force: {force}");
@@ -181,9 +175,11 @@ public class IntegratedHapticNode : HapticNode
             physicsRot,
             1);
 
+        Vector3 relAngVel = physicsAngVel - trackedAngVel;
+
         Vector3 angAccel =
             -(Utils.GetMaxStiffness() * rotStiffness * relRot
-            + Utils.GetMaxDamping() * rotDamping * physicsAngVel);
+            + Utils.GetMaxDamping() * rotDamping * relAngVel);
         // Apply the complete world-space inertia tensor. This preserves coupling
         // between axes when the aggregate tensor has products of inertia.
         Vector3 torque = Utils.MultiplyInertia(physicsInertia, angAccel);
@@ -194,64 +190,27 @@ public class IntegratedHapticNode : HapticNode
         return torque;
     }
 
+    public Vector3 GetPhysicsAccel()
+    {
+        return physicsAccel;
+    }
+
     private void LogDiagnostics(
         Vector3 forceOnPhysics,
         Vector3 torqueOnPhysics,
-        Vector3 forceOnTracked,
         Vector3 inertiaForce)
     {
         float timeStep = Time.fixedDeltaTime;
-        Vector3 relPos = physicsAb.transform.position - trackedTransform.position;
-        Vector3 dampingVelocity = physicsVel;
-        Vector3 controlAcceleration =
-            -(Utils.GetMaxStiffness() * posStiffness * relPos
-            + Utils.GetMaxDamping() * posDamping * dampingVelocity);
-        float relativePositionDot =
-            hasPreviousRelativePosition
-                ? Vector3.Dot(previousRelativePosition, relPos)
-                : 0f;
 
         Debug.Log(
             $"[{name}] Step={fixedStep}, t={Time.time:F4}, dt={timeStep:F6}\n" +
-            $"tracked pos={trackedTransform.position}, prev={prevTrackedPos}, " +
+            $"tracked pos={trackedPos:F4}, prev={prevTrackedPos:F4}, " +
             $"vel={trackedVel}, prevVel={prevTrackedVel}\n" +
-            $"physics pos={physicsAb.transform.position}, vel={physicsVel}, " +
+            $"physics pos={physicsAb.transform.position:F4}, vel={physicsVel:F4}, " +
             $"accel={physicsAccel}, mass={physicsMass:F6}\n" +
-            $"relative pos={relPos}, |pos|={relPos.magnitude:F6}, " +
-            $"damping velocity={dampingVelocity}, " +
-            $"|vel|={dampingVelocity.magnitude:F6}\n" +
-            $"control accel={controlAcceleration}\n" +
-            $"position dot previous={relativePositionDot:F6}\n" +
             $"force physics={forceOnPhysics}, |force|={forceOnPhysics.magnitude:F6}, " +
-            $"force tracked={forceOnTracked}, |force|={forceOnTracked.magnitude:F6}\n" +
             $"inertia force={inertiaForce}, |inertia|={inertiaForce.magnitude:F6}, " +
             $"torque={torqueOnPhysics}, |torque|={torqueOnPhysics.magnitude:F6}");
-
-        if (hasPreviousRelativePosition && relativePositionDot < 0f)
-        {
-            Debug.LogWarning(
-                $"[{name}] Relative position crossed through zero; " +
-                "this is an overshoot indicator.");
-        }
-
-        if (!IsFinite(forceOnPhysics) || !IsFinite(forceOnTracked) ||
-            !IsFinite(inertiaForce) || !IsFinite(torqueOnPhysics))
-        {
-            Debug.LogError($"[{name}] Non-finite control output detected.");
-        }
-
-        if (forceOnPhysics.magnitude > maxPhysicsForce ||
-            torqueOnPhysics.magnitude > maxPhysicsTorque)
-        {
-            Debug.LogWarning(
-                $"[{name}] Control output exceeds configured limits. " +
-                $"force={forceOnPhysics.magnitude:F6}/{maxPhysicsForce:F6}, " +
-                $"torque={torqueOnPhysics.magnitude:F6}/{maxPhysicsTorque:F6}. " +
-                "The runtime clamps are currently disabled.");
-        }
-
-        previousRelativePosition = relPos;
-        hasPreviousRelativePosition = true;
     }
 
     private static bool IsFinite(Vector3 value)
