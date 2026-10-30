@@ -90,7 +90,11 @@ public class HandSkeleton : MonoBehaviour
     private int[] perJointDOF = new int[3] {2, 1, 1};
 
     private HapticNode[] fingertipNodes = new HapticNode[N_FINGERS];
+    private Vector3[] prevFingertipLinearMomenta = new Vector3[N_FINGERS];
     private Vector3[] fingertipLinearMomenta = new Vector3[N_FINGERS];
+    private Vector3[] prevFingertipForces = new Vector3[N_FINGERS];
+
+    private Vector3[] fingertipForces = new Vector3[N_FINGERS];
 
     void Start()
     {
@@ -582,6 +586,13 @@ public class HandSkeleton : MonoBehaviour
         drive.damping = fingerDamping * axisInertia * Utils.GetMaxDamping();
         drive.forceLimit = fingerMaxTorque;
 
+        float currentPhysicsAngle = body.jointPosition[axisType] * Mathf.Rad2Deg;
+        float angularError = currentPhysicsAngle - targetAngle;
+        float driveTorque = -(drive.stiffness * angularError + drive.damping * Vector3.Dot(body.angularVelocity, axis));
+
+        // Clamp the drive torque to the force limit
+        driveTorque = Mathf.Clamp(driveTorque, -drive.forceLimit, drive.forceLimit);
+
         HapticNode fingertipNode = fingertipNodes[fingerIndex];
         Vector3 jointToFingertip =
             fingertipNode.transform.position - jointPoint;
@@ -589,6 +600,9 @@ public class HandSkeleton : MonoBehaviour
         // Gets relationship between joint torque and fingertip force
         float sqrMagnitude = jointToFingertip.sqrMagnitude;
         Vector3 jacobianColumn = Vector3.Cross(axis, jointToFingertip) / sqrMagnitude;
+
+        // Gets force at fingertip
+        fingertipForces[fingerIndex] += jacobianColumn * driveTorque;
 
         // Convert this joint's angular velocity into its angular momentum
         // contribution, then map that contribution to fingertip linear
@@ -602,7 +616,8 @@ public class HandSkeleton : MonoBehaviour
         Debug.Log(
             $"fingerIndex: {fingerIndex}\n" +
             $"jointToFingertip: {jointToFingertip}\n" +
-            $"targetAngle: {targetAngle:F3}\n" +
+            $"targetAngle: {targetAngle:F3}, currentPhysicsAngle: {currentPhysicsAngle:F3}, driveTorque: {driveTorque:F3}\n" +
+            $"fingertipForce: {fingertipForces[fingerIndex]}\n" +
             $"fingertipLinearMomentum: {fingertipLinearMomenta[fingerIndex]}"
             );
         
@@ -614,12 +629,19 @@ public class HandSkeleton : MonoBehaviour
         HapticNode node = fingertipNodes[fingerIndex];
         if (node == null)
             return;
-    
-        node.UpdatePhysicsState(
-            fingertipLinearMomenta[fingerIndex],
-            Vector3.zero);
 
+        Vector3 linearMomentumChange = fingertipLinearMomenta[fingerIndex] - prevFingertipLinearMomenta[fingerIndex];
+        Vector3 externalForce = linearMomentumChange / Time.fixedDeltaTime - prevFingertipForces[fingerIndex];
+
+        prevFingertipLinearMomenta[fingerIndex] = fingertipLinearMomenta[fingerIndex];
+        prevFingertipForces[fingerIndex] = fingertipForces[fingerIndex];
         fingertipLinearMomenta[fingerIndex] = Vector3.zero;
+        fingertipForces[fingerIndex] = Vector3.zero;
+
+        node.UpdateWrench(
+            externalForce,
+            Vector3.zero,
+            Vector3.zero);
     }
 
     private void LogSplayJoint(

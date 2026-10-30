@@ -12,9 +12,6 @@ public class HapticNode : MonoBehaviour
     // Tracked object
     public Transform trackedTransform;
 
-    // Haptic node to reference inertia from
-    public HapticNode inertiaReference;
-
     [Range(0f, 1f)]
     public float posStiffness;
     [Range(0f, 1f)]
@@ -29,23 +26,7 @@ public class HapticNode : MonoBehaviour
 
     // Force visualization object
     private GameObject forceVisual;
-    
-    // Whether this node is for reference only
-    public bool isReferenceOnly;
-
-    // Target to send inertia reference to if relevant
-    public HapticNode inertiaTarget;
-
-    // Inertial force on node
-    public Vector3 inertiaForce;
-
-    // Linear momentum of node
-    public Vector3 linearMomentum;
-    private bool physicsUpdated = false;
-
-    // Linear momentum on reference object
-    public Vector3 linearMomentumReference;
-    private bool referenceUpdated = false;
+    private bool initialized;
 
     public static IReadOnlyList<HapticNode> ActiveNodes => activeNodes;
 
@@ -63,10 +44,13 @@ public class HapticNode : MonoBehaviour
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     protected void Start()
     {
-        if (inertiaReference != null)
-        {
-            inertiaReference.SetInertiaTarget(this);
-        }
+        Initialize();
+    }
+
+    private void Initialize()
+    {
+        if (initialized)
+            return;
 
         // Spawn force visual on tracked transform
         if (trackedTransform == null)
@@ -84,55 +68,16 @@ public class HapticNode : MonoBehaviour
         forceVisual = Instantiate(haptics.forceVisualPrefab, trackedTransform.position, trackedTransform.rotation);
         forceVisual.transform.SetParent(trackedTransform, true);
         forceVisual.SetActive(false);
-    }
-
-    protected void SetInertiaTarget(HapticNode target)
-    {
-        inertiaTarget = target;
+        initialized = true;
     }
 
     // Usually called from the physics update loop to update the wrench on the physics object
-    public void UpdatePhysicsState(Vector3 linearMomentum, Vector3 inertiaForce)
+    public void UpdateWrench(Vector3 forceOnTracked, Vector3 torqueOnTracked, Vector3 inertiaForce)
     {
-        this.linearMomentum = linearMomentum;
-        this.inertiaForce = inertiaForce;
-        physicsUpdated = true;
-
-        // Update inertia target if it exists
-        if (inertiaTarget != null)
-        {
-            inertiaTarget.UpdatePhysicsState(linearMomentum, inertiaForce);
-        }
-
-        // If the reference object has been updated, update the state
-        if (inertiaReference == null || referenceUpdated)
-        {
-            UpdateState();
-        }
-    }
-
-    public void UpdateInertiaState(Vector3 linearMomentumReference)
-    {
-        this.linearMomentumReference = linearMomentumReference;
-        referenceUpdated = true;
-
-        // If the physics object has been updated, update the state
-        if (physicsUpdated)
-        {
-            UpdateState();
-        }
-    }
-
-    private void UpdateState()
-    {
-        // If this node is reference only, skip updating the state
-        if (isReferenceOnly)
-        {
-            return;
-        }
+        Initialize();
 
         // Calculate the force to emulate on the tracked object
-        Vector3 force = (linearMomentum - linearMomentumReference)/Time.fixedDeltaTime;
+        Vector3 force = forceOnTracked;
 
         // If inertia is enabled, adds inertial force to the tracked
         if (haptics.useInertia)
@@ -152,6 +97,9 @@ public class HapticNode : MonoBehaviour
 
     private void UpdateForceVisual(Vector3 force)
     {
+        if (!initialized)
+            return;
+
         // If visualization is on and a force is present
         if (haptics.visualization && force.magnitude > 0)
         {
