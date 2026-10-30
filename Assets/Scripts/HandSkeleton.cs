@@ -165,6 +165,8 @@ public class HandSkeleton : MonoBehaviour
         rootBody.mass = Mathf.Epsilon;
         rootBody.immovable = false;
         rootBody.useGravity = useGravity;
+        rootBody.linearDamping = 0f;
+        rootBody.angularDamping = 0f;
         rootBody.solverIterations = 60;
         rootBody.solverVelocityIterations = 20;
         articulationBodies.Add(rootBody);
@@ -225,8 +227,10 @@ public class HandSkeleton : MonoBehaviour
         {
             palmBody = palmChild.AddComponent<ArticulationBody>();
         }
-        palmBody.mass = perBoneMass * 3f;
+        palmBody.mass = palmMass;
         palmBody.useGravity = useGravity;
+        palmBody.linearDamping = 0f;
+        palmBody.angularDamping = 0f;
         palmBody.solverIterations = 60;
         palmBody.solverVelocityIterations = 20;
         palmBody.jointType = ArticulationJointType.FixedJoint;
@@ -302,6 +306,9 @@ public class HandSkeleton : MonoBehaviour
 
         body.mass = perBoneMass;
         body.useGravity = useGravity;
+        body.linearDamping = 0f;
+        body.angularDamping = 0f;
+        body.jointFriction = 0f;
         body.anchorPosition = Vector3.zero;
         body.collisionDetectionMode = CollisionDetectionMode.Continuous;
         // Anchor rotations should have the forward direction aligned with the bone with the roll stabilized by the up vector
