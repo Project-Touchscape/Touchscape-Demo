@@ -970,6 +970,7 @@ MonoBehaviour:
   palmMaxTorque: 500
   fingerStiffness: 1
   fingerDamping: 1
+  fingerMaxTorque: 40
 --- !u!1 &795889841 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 3484465093080518942, guid: b3ed8a0a703ebd34a9e44ed3d9f1fcf6, type: 3}
@@ -1114,9 +1115,11 @@ MonoBehaviour:
   serverPort: 8080
   forceFeedback: 1
   useInertiaValue: 0
+  useInertia: 0
   visualization: 1
   forceVisualPrefab: {fileID: 910768547617064684, guid: 2a12e6e218c663347ad7214e1fb1b21d, type: 3}
   forceVisualScale: 0.05
+  minOutputForce: 0.1
 --- !u!4 &1105916268 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 2604916979015095787, guid: 3f7511fbc40ae7a4b89c3298a3de199d, type: 3}
@@ -1410,6 +1413,7 @@ MonoBehaviour:
   palmMaxTorque: 500
   fingerStiffness: 1
   fingerDamping: 1
+  fingerMaxTorque: 40
 --- !u!1 &1372590786
 GameObject:
   m_ObjectHideFlags: 0
