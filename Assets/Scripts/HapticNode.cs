@@ -72,7 +72,7 @@ public class HapticNode : MonoBehaviour
     }
 
     // Usually called from the physics update loop to update the wrench on the physics object
-    public void UpdateWrench(Vector3 forceOnTracked, Vector3 torqueOnTracked, Vector3 inertiaForce)
+    public void UpdateState(Vector3 forceOnTracked, Vector3 inertiaForce)
     {
         Initialize();
 

@@ -36,7 +36,6 @@ public class IntegratedHapticNode : HapticNode
     private Vector3 prevPhysicsVel = Vector3.zero;
     private Vector3 physicsAccel = Vector3.zero;
     private Vector3 previousForceOnPhysics = Vector3.zero;
-    private bool hasPreviousPhysicsStep;
     private float nextDiagnosticsTime;
     private int fixedStep;
     private Vector3 previousRelativePosition = Vector3.zero;
@@ -103,13 +102,13 @@ public class IntegratedHapticNode : HapticNode
         physicsAb.AddTorque(newTorqueOnPhysics);
 
         previousForceOnPhysics = newForceOnPhysics;
-        hasPreviousPhysicsStep = true;
 
         // Gets inertia force to apply if applicable
         Vector3 inertiaForce = -physicsMass * trackedAccel;
         // Gets accurate force to apply on tracked object
-        Vector3 trackedForce = GetForceOnTracked();
-        UpdateWrench(trackedForce, newTorqueOnPhysics, inertiaForce);
+        Vector3 externalForce =
+            physicsMass * physicsAccel - previousForceOnPhysics;
+        UpdateState(externalForce, inertiaForce);
 
         //LogDiagnostics(newForceOnPhysics, newTorqueOnPhysics, trackedForce, inertiaForce);
     }
@@ -193,23 +192,6 @@ public class IntegratedHapticNode : HapticNode
         //Debug.Log($"Relative rotation axis: {relRot.normalized}, angle: {relRot.magnitude} rad, torque: {torque}");
 
         return torque;
-    }
-
-    private Vector3 GetForceOnTracked()
-    {
-        // Estimate the external force from the previous physics step:
-        //
-        //     F_external = m * acceleration - F_controller
-        //
-        // The controller force is subtracted so that a body with no external
-        // force produces zero haptic force, even while it is being controlled.
-        Vector3 externalForce =
-            physicsMass * physicsAccel - previousForceOnPhysics;
-
-        if (!hasPreviousPhysicsStep)
-            return Vector3.zero;
-
-        return externalForce;
     }
 
     private void LogDiagnostics(

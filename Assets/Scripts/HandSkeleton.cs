@@ -638,9 +638,8 @@ public class HandSkeleton : MonoBehaviour
         fingertipLinearMomenta[fingerIndex] = Vector3.zero;
         fingertipForces[fingerIndex] = Vector3.zero;
 
-        node.UpdateWrench(
+        node.UpdateState(
             externalForce,
-            Vector3.zero,
             Vector3.zero);
     }
 
