@@ -1154,6 +1154,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Cube (3)
       objectReference: {fileID: 0}
+    - target: {fileID: 1622745079790783581, guid: 0886c7611c132684ea26007d1113e53c, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 5c829de98951efe4f845b85f53b0e3d0, type: 2}
     - target: {fileID: 8372620129679473635, guid: 0886c7611c132684ea26007d1113e53c, type: 3}
       propertyPath: m_LocalScale.x
       value: 0.05
@@ -1223,6 +1227,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Cube (1)
       objectReference: {fileID: 0}
+    - target: {fileID: 1622745079790783581, guid: 0886c7611c132684ea26007d1113e53c, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 5c829de98951efe4f845b85f53b0e3d0, type: 2}
     - target: {fileID: 8372620129679473635, guid: 0886c7611c132684ea26007d1113e53c, type: 3}
       propertyPath: m_LocalScale.x
       value: 0.05
