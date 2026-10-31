@@ -620,8 +620,12 @@ public class HandSkeleton : MonoBehaviour
 
         // Gets inertial forces at fingertips due to root node acceleration
 
-        // Finds torque on the joint due to the linear acceleration
-        Vector3 effectiveForce = -totalMass * rootNode.GetPhysicsAccel();
+        // Gets component of linear acceleration due to root node angular acceleration
+        Vector3 rootCOMtoJointCOM = com - rootNode.GetPhysicsCOM();
+        Vector3 angAccelComponent = Vector3.Cross(rootNode.GetPhysicsAngAccel(), rootCOMtoJointCOM);
+
+        // Finds torque on the joint due to the linear acceleration and angular acceleration
+        Vector3 effectiveForce = -totalMass * (rootNode.GetPhysicsAccel() + angAccelComponent);
         Vector3 jointToCOM = com - jointPoint;
         Vector3 effectiveTorque = Vector3.Cross(jointToCOM, effectiveForce);
         float effectiveJointTorque = Vector3.Dot(effectiveTorque, axis);

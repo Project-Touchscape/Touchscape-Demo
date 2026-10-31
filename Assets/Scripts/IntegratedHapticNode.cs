@@ -32,9 +32,14 @@ public class IntegratedHapticNode : HapticNode
     private Matrix4x4 physicsInertia;
 
     //Physics node kinematics
+    private Vector3 physicsCOM = Vector3.zero;
+    private Vector3 prevPhysicsCOM = Vector3.zero;
     private Vector3 physicsVel = Vector3.zero;
     private Vector3 prevPhysicsVel = Vector3.zero;
     private Vector3 physicsAccel = Vector3.zero;
+    private Vector3 physicsAngVel = Vector3.zero;
+    private Vector3 prevPhysicsAngVel = Vector3.zero;
+    private Vector3 physicsAngAccel = Vector3.zero;
     private Vector3 prevPhysicsForce = Vector3.zero;
     private float nextDiagnosticsTime;
     private int fixedStep;
@@ -57,13 +62,19 @@ public class IntegratedHapticNode : HapticNode
     {
         physicsMass = physicsAb.mass;
         physicsInertia = Utils.WorldInertiaMatrix(physicsAb);
+
+        prevPhysicsCOM = physicsCOM;
+        physicsCOM = physicsAb.transform.position;
     }
 
     public void SetChainedMassProperties()
     {
-        Utils.GetChainedMassProperties(physicsAb, out float mass, out _, out Matrix4x4 inertia);
+        Utils.GetChainedMassProperties(physicsAb, out float mass, out Vector3 com, out Matrix4x4 inertia);
         physicsMass = mass;
         physicsInertia = inertia;
+
+        prevPhysicsCOM = physicsCOM;
+        physicsCOM = com;
     }
 
     private void UpdateMassProperties()
@@ -130,10 +141,15 @@ public class IntegratedHapticNode : HapticNode
         prevTrackedAngVel = trackedAngVel;
         trackedAngVel = Utils.AngularVelocityFromQuaternions(prevTrackedRot, trackedRot, Time.fixedDeltaTime);
 
-        // Physics acceleration kinematics
+        // Physics position kinematics
         prevPhysicsVel = physicsVel;
-        physicsVel = physicsAb.linearVelocity;
+        physicsVel = (physicsCOM - prevPhysicsCOM) / Time.fixedDeltaTime;
         physicsAccel = (physicsVel - prevPhysicsVel) / Time.fixedDeltaTime;
+
+        // Physics rotation kinematics
+        prevPhysicsAngVel = physicsAngVel;
+        physicsAngVel = physicsAb.angularVelocity;
+        physicsAngAccel = (physicsAngVel - prevPhysicsAngVel) / Time.fixedDeltaTime;
     }
 
     private Vector3 ComputeForceOnPhysics()
@@ -145,7 +161,7 @@ public class IntegratedHapticNode : HapticNode
 
         Vector3 relPos = physicsAb.transform.position - trackedPos;
 
-        Vector3 relVel = physicsAb.linearVelocity - trackedVel;
+        Vector3 relVel = physicsVel - trackedVel;
 
         Vector3 accel =
             -(Utils.GetMaxStiffness() * posStiffness * relPos
@@ -166,8 +182,6 @@ public class IntegratedHapticNode : HapticNode
         // Get orientations and angular velocities
         Quaternion trackedRotCopy = trackedRot;
         Quaternion physicsRot = gameObject.transform.rotation;
-
-        Vector3 physicsAngVel = physicsAb.angularVelocity;
 
         // Calculate the relative rotation from tracked to physics in global coordinates
         Vector3 relRot = Utils.AngularVelocityFromQuaternions(
@@ -195,6 +209,16 @@ public class IntegratedHapticNode : HapticNode
         return physicsAccel;
     }
 
+    public Vector3 GetPhysicsAngAccel()
+    {
+        return physicsAngAccel;
+    }
+
+    public Vector3 GetPhysicsCOM()
+    {
+        return physicsCOM;
+    }
+
     private void LogDiagnostics(
         Vector3 forceOnPhysics,
         Vector3 torqueOnPhysics,
@@ -206,7 +230,7 @@ public class IntegratedHapticNode : HapticNode
             $"[{name}] Step={fixedStep}, t={Time.time:F4}, dt={timeStep:F6}\n" +
             $"tracked pos={trackedPos:F4}, prev={prevTrackedPos:F4}, " +
             $"vel={trackedVel}, prevVel={prevTrackedVel}\n" +
-            $"physics pos={physicsAb.transform.position:F4}, vel={physicsVel:F4}, " +
+            $"physics pos={physicsCOM:F4}, vel={physicsVel:F4}, " +
             $"accel={physicsAccel}, mass={physicsMass:F6}\n" +
             $"force physics={forceOnPhysics}, |force|={forceOnPhysics.magnitude:F6}, " +
             $"inertia force={inertiaForce}, |inertia|={inertiaForce.magnitude:F6}, " +

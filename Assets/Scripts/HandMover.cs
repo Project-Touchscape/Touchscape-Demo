@@ -4,7 +4,8 @@ public class HandMover : MonoBehaviour
 {
     private Rigidbody rb;
 
-    public float moveSpeed = 0.1f; // Speed of movement
+    public float moveSpeed = 0.1f; // Speed of linear movement
+    public float rotateSpeed = 100f; // Speed of rotational movement
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
@@ -39,6 +40,30 @@ public class HandMover : MonoBehaviour
         if (Input.GetKey(KeyCode.S))
         {
             rb.position += Vector3.back * Time.fixedDeltaTime * moveSpeed;
+        }
+        if (Input.GetKey(KeyCode.I))
+        {
+            rb.rotation *= Quaternion.AngleAxis(Time.fixedDeltaTime * rotateSpeed, Vector3.up);
+        }
+        if (Input.GetKey(KeyCode.O))
+        {
+            rb.rotation *= Quaternion.AngleAxis(Time.fixedDeltaTime * rotateSpeed, Vector3.down);
+        }
+        if (Input.GetKey(KeyCode.J))
+        {
+            rb.rotation *= Quaternion.AngleAxis(Time.fixedDeltaTime * rotateSpeed, Vector3.left);
+        }
+        if (Input.GetKey(KeyCode.K))
+        {
+            rb.rotation *= Quaternion.AngleAxis(Time.fixedDeltaTime * rotateSpeed, Vector3.right);
+        }
+        if (Input.GetKey(KeyCode.N))
+        {
+            rb.rotation *= Quaternion.AngleAxis(Time.fixedDeltaTime * rotateSpeed, Vector3.forward);
+        }
+        if (Input.GetKey(KeyCode.M))
+        {
+            rb.rotation *= Quaternion.AngleAxis(Time.fixedDeltaTime * rotateSpeed, Vector3.back);
         }
     }
 }

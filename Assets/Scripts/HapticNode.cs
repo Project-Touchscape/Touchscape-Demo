@@ -82,7 +82,7 @@ public class HapticNode : MonoBehaviour
             physicsForce -= inertiaForce;
         }
 
-        // Clamps force to minimum and maximum
+        // Clamps force to minimum
         if (physicsForce.magnitude < haptics.minOutputForce)
         {
             physicsForce = Vector3.zero;
