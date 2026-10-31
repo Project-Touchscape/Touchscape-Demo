@@ -97,6 +97,8 @@ public class HandSkeleton : MonoBehaviour
     private Vector3[] prevFingertipInertialForces = new Vector3[N_FINGERS];
     private Vector3[] fingertipInertialForces = new Vector3[N_FINGERS];
 
+    private bool prevUseGravity = false;
+
     void Start()
     {
         // Initialize palm articulation body and collider
@@ -111,6 +113,16 @@ public class HandSkeleton : MonoBehaviour
 
     void FixedUpdate()
     {
+        // Checks for change in gravity state
+        if (prevUseGravity != useGravity)
+        {
+            prevUseGravity = useGravity;
+            // Update the gravity state of all articulation bodies
+            foreach (ArticulationBody ab in articulationBodies)
+            {
+                ab.useGravity = useGravity;
+            }
+        }
         // Update physics for root haptic node
         if (rootNode != null)
         {
