@@ -8,11 +8,11 @@ TagManager:
   - Default
   - TransparentFX
   - Ignore Raycast
-  - Haptics
+  - Ignore Haptics
   - Water
   - UI
-  - Ignore Haptics
-  - Hand
+  - Left Hand
+  - Right Hand
   - 
   - 
   - 

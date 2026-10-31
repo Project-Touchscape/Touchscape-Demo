@@ -20,7 +20,6 @@ public class HapticNode : MonoBehaviour
     public float rotStiffness;
     [Range(0f, 1f)]
     public float rotDamping;
-    public float minOutputForce;
     public float maxPhysicsForce;
     public float maxPhysicsTorque;
 
