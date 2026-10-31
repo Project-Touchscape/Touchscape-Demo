@@ -7,14 +7,14 @@ public class Respawner : MonoBehaviour
     private Vector3 originalPosition;
     private Quaternion originalRotation;
 
-    private Rigidbody rigidbody;
+    private Rigidbody rb;
 
     void Start()
     {
         // Save the initial position and rotation.
         originalPosition = transform.position;
         originalRotation = transform.rotation;
-        rigidbody = GetComponent<Rigidbody>();
+        rb = GetComponent<Rigidbody>();
     }
 
     void FixedUpdate()
@@ -26,8 +26,8 @@ public class Respawner : MonoBehaviour
             transform.SetPositionAndRotation(originalPosition, originalRotation);
 
             // Stops any motion
-            rigidbody.angularVelocity = Vector3.zero;
-            rigidbody.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+            rb.linearVelocity = Vector3.zero;
         }
     }
 }

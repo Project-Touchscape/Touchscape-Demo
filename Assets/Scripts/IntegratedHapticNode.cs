@@ -116,7 +116,7 @@ public class IntegratedHapticNode : HapticNode
         Vector3 inertiaForce = -physicsMass * physicsAccel;
         UpdateState(-prevPhysicsForce, inertiaForce);
 
-        LogDiagnostics(newPhysicsForce, newPhysicsTorque, inertiaForce);
+        //LogDiagnostics(newPhysicsForce, newPhysicsTorque, inertiaForce);
 
         prevPhysicsForce = newPhysicsForce;
     }
