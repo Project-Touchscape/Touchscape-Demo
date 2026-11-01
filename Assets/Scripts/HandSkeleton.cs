@@ -66,6 +66,10 @@ public class HandSkeleton : MonoBehaviour
 
     public float fingerMaxTorque = 40f;
 
+    [Header("Articulation Chain Rebuild")]
+    [Min(0.0001f)] public float rootPositionRebuildThreshold = 0.002f;
+    [Min(0.0001f)] public float boneLengthRebuildThreshold = 0.001f;
+
     /*[Header("Joint Debug")]
     public bool logSplayJoint = false;
     [Min(0)]
@@ -110,12 +114,16 @@ public class HandSkeleton : MonoBehaviour
     private readonly bool[,] metacarpalReferencesInitialized = new bool[N_FINGERS, 2];
 
     private bool prevUseGravity = false;
+    private Vector3[] builtFingerRootPositions = new Vector3[N_FINGERS];
+    private float[,] builtBoneLengths = new float[N_FINGERS, N_ACTIVE_BONES];
+    private bool hasBuiltGeometry;
 
     void Start()
     {
         // Initialize palm articulation body and collider
         ConstructPalm();
         ConstructFingers();
+        CaptureBuiltGeometry();
     }
 
     void Update()
@@ -125,6 +133,13 @@ public class HandSkeleton : MonoBehaviour
 
     void FixedUpdate()
     {
+        if (HasTrackedGeometryChanged()) {
+            RebuildArticulationChain();
+
+            // Logs warning
+            Debug.LogWarning("Tracked geometry has changed. Rebuilding articulation chain.");
+        }
+
         // Checks for change in gravity state
         if (prevUseGravity != useGravity)
         {
@@ -152,7 +167,14 @@ public class HandSkeleton : MonoBehaviour
         }
 
         // Update the articulation bodies' target angles based on the tracked joint rotations
-        for (int fingerIndex = 0; fingerIndex < Mathf.Min(N_FINGERS, fingers.Length); fingerIndex++)
+        if (fingers == null || trackedFingers == null)
+            return;
+
+        for (int fingerIndex = 0;
+             fingerIndex < Mathf.Min(
+                 N_FINGERS,
+                 Mathf.Min(fingers.Length, trackedFingers.Length));
+             fingerIndex++)
         {
             GameObject currentJoint = fingers[fingerIndex];
 
@@ -162,7 +184,9 @@ public class HandSkeleton : MonoBehaviour
             if (trackedJoint == null || currentJoint == null)
                 continue;
 
-            for (int jointIndex = 0; jointIndex < N_ACTIVE_BONES; jointIndex++)
+            for (int jointIndex = 0;
+                 jointIndex < N_ACTIVE_BONES;
+                 jointIndex++)
             {
                 // Update the articulation body's target angle based on the tracked joint's rotation
                 UpdateJointParams(
@@ -189,6 +213,175 @@ public class HandSkeleton : MonoBehaviour
     private bool IsThumb(int fingerIndex)
     {
         return fingerIndex == N_FINGERS - 1;
+    }
+
+    private bool HasTrackedGeometryChanged()
+    {
+        if (trackedRoot == null || fingers == null || trackedFingers == null)
+            return false;
+
+        for (int fingerIndex = 0;
+             fingerIndex < Mathf.Min(
+                 N_FINGERS,
+                 Mathf.Min(fingers.Length, trackedFingers.Length));
+             fingerIndex++)
+        {
+            Transform trackedFinger = trackedFingers[fingerIndex];
+            if (trackedFinger == null)
+                continue;
+
+            Vector3 rootPosition = trackedRoot.InverseTransformPoint(
+                trackedFinger.position);
+            if (!hasBuiltGeometry ||
+                Vector3.Distance(
+                    rootPosition,
+                    builtFingerRootPositions[fingerIndex]) >
+                rootPositionRebuildThreshold)
+            {
+                return true;
+            }
+
+            Transform trackedJoint = trackedFinger;
+            for (int jointIndex = 0;
+                 jointIndex < N_ACTIVE_BONES;
+                 jointIndex++)
+            {
+                float length = GetBoneVector(trackedJoint).magnitude;
+                if (!hasBuiltGeometry ||
+                    Mathf.Abs(
+                        length -
+                        builtBoneLengths[fingerIndex, jointIndex]) >
+                    boneLengthRebuildThreshold)
+                {
+                    return true;
+                }
+
+                trackedJoint = GetBoneChild(trackedJoint);
+                if (trackedJoint == null)
+                    break;
+            }
+        }
+
+        return false;
+    }
+
+    private void CaptureBuiltGeometry()
+    {
+        if (trackedRoot == null || trackedFingers == null)
+            return;
+
+        for (int fingerIndex = 0;
+             fingerIndex < Mathf.Min(N_FINGERS, trackedFingers.Length);
+             fingerIndex++)
+        {
+            Transform trackedFinger = trackedFingers[fingerIndex];
+            if (trackedFinger == null)
+                continue;
+
+            builtFingerRootPositions[fingerIndex] =
+                trackedRoot.InverseTransformPoint(trackedFinger.position);
+
+            Transform trackedJoint = trackedFinger;
+            for (int jointIndex = 0;
+                 jointIndex < N_ACTIVE_BONES;
+                 jointIndex++)
+            {
+                builtBoneLengths[fingerIndex, jointIndex] =
+                    GetBoneVector(trackedJoint).magnitude;
+                trackedJoint = GetBoneChild(trackedJoint);
+                if (trackedJoint == null)
+                    break;
+            }
+        }
+
+        hasBuiltGeometry = true;
+    }
+
+    private void RebuildArticulationChain()
+    {
+        if (fingers == null || trackedFingers == null)
+            return;
+
+        ArticulationBody[] bodies =
+            GetComponentsInChildren<ArticulationBody>(true);
+        foreach (ArticulationBody body in bodies)
+            body.enabled = false;
+
+        for (int fingerIndex = 0;
+             fingerIndex < Mathf.Min(
+                 N_FINGERS,
+                 Mathf.Min(fingers.Length, trackedFingers.Length));
+             fingerIndex++)
+        {
+            GameObject currentJoint = fingers[fingerIndex];
+            Transform trackedJoint = trackedFingers[fingerIndex];
+            if (currentJoint == null || trackedJoint == null)
+                continue;
+
+            if (trackedRoot != null)
+            {
+                currentJoint.transform.position =
+                    gameObject.transform.TransformPoint(
+                        trackedRoot.InverseTransformPoint(
+                            trackedJoint.position));
+            }
+
+            for (int jointIndex = 0;
+                 jointIndex < N_ACTIVE_BONES;
+                 jointIndex++)
+            {
+                Transform physicsChild = GetBoneChild(currentJoint.transform);
+                Vector3 trackedBone = GetBoneVector(trackedJoint);
+                if (physicsChild == null || trackedBone.sqrMagnitude <= Mathf.Epsilon)
+                    break;
+
+                Vector3 localDirection = physicsChild.localPosition;
+                localDirection = localDirection.sqrMagnitude <= Mathf.Epsilon
+                    ? Vector3.forward
+                    : localDirection.normalized;
+                physicsChild.localPosition =
+                    localDirection * trackedBone.magnitude;
+
+                Transform colliderTransform =
+                    currentJoint.transform.Find(FingerColliderName);
+                CapsuleCollider collider = colliderTransform == null
+                    ? null
+                    : colliderTransform.GetComponent<CapsuleCollider>();
+                if (collider != null)
+                {
+                    UpdateBoneCollider(
+                        fingerIndex,
+                        jointIndex,
+                        collider,
+                        trackedBone.magnitude);
+                }
+
+                trackedJoint = GetBoneChild(trackedJoint);
+                currentJoint = physicsChild.gameObject;
+                if (trackedJoint == null)
+                    break;
+            }
+        }
+
+        articulationBodies.Clear();
+        ArticulationBody rootBody = GetComponent<ArticulationBody>();
+        if (rootBody != null)
+            articulationBodies.Add(rootBody);
+
+        Transform palmCollider = palm == null
+            ? null
+            : palm.transform.Find(palm.name + " Collider");
+        ArticulationBody palmBody = palmCollider == null
+            ? null
+            : palmCollider.GetComponent<ArticulationBody>();
+        if (palmBody != null)
+            articulationBodies.Add(palmBody);
+
+        ConstructFingers();
+        foreach (ArticulationBody body in articulationBodies)
+            body.enabled = true;
+
+        CaptureBuiltGeometry();
     }
 
     private void ConstructPalm()
@@ -295,7 +488,9 @@ public class HandSkeleton : MonoBehaviour
         {
             GameObject currentJoint = fingers[fingerIndex];
 
-            for (int jointIndex = 0; jointIndex < N_ACTIVE_BONES; jointIndex++)
+            for (int jointIndex = 0;
+                 jointIndex < N_ACTIVE_BONES;
+                 jointIndex++)
             {
                 if (currentJoint == null)
                     break;
@@ -541,22 +736,6 @@ public class HandSkeleton : MonoBehaviour
         if (currentJoint == null || trackedJoint == null)
             return;
 
-        // The XR hand can change both its pose and its proportions as tracking
-        // confidence and the estimated skeleton change. Keep the root and bone
-        // geometry aligned, while leaving joint rotation to the articulation
-        // drives below.
-        if (jointIndex == 0)
-            AlignJointPosition(currentJoint.transform, trackedJoint);
-
-        float boneLength = UpdateBoneLength(currentJoint.transform, trackedJoint);
-        Transform colliderTransform = currentJoint.transform.Find(FingerColliderName);
-        CapsuleCollider collider = colliderTransform == null
-            ? null
-            : colliderTransform.GetComponent<CapsuleCollider>();
-
-        if (collider != null && boneLength > Mathf.Epsilon)
-            UpdateBoneCollider(fingerIndex, jointIndex, collider, boneLength);
-
         float dof = perJointDOF[jointIndex];
         ArticulationBody body = currentJoint.GetComponent<ArticulationBody>();
 
@@ -611,36 +790,6 @@ public class HandSkeleton : MonoBehaviour
                 }*/
             }
         }
-    }
-
-    private void AlignJointPosition(Transform physicsJoint, Transform trackedJoint)
-    {
-        if (trackedRoot == null)
-            return;
-
-        Vector3 trackedRelativePosition =
-            trackedRoot.InverseTransformPoint(trackedJoint.position);
-        physicsJoint.position =
-            gameObject.transform.TransformPoint(trackedRelativePosition);
-    }
-
-    private float UpdateBoneLength(Transform physicsJoint, Transform trackedJoint)
-    {
-        Transform physicsChild = GetBoneChild(physicsJoint);
-        Vector3 trackedBone = GetBoneVector(trackedJoint);
-        float trackedBoneLength = trackedBone.magnitude;
-
-        if (physicsChild == null || trackedBoneLength <= Mathf.Epsilon)
-            return trackedBoneLength;
-
-        Vector3 localDirection = physicsChild.localPosition;
-        if (localDirection.sqrMagnitude <= Mathf.Epsilon)
-            localDirection = Vector3.forward;
-        else
-            localDirection.Normalize();
-
-        physicsChild.localPosition = localDirection * trackedBoneLength;
-        return trackedBoneLength;
     }
 
     private ArticulationDrive UpdateAxisDrive(
