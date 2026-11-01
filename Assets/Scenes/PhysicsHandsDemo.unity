@@ -755,8 +755,8 @@ Transform:
   m_GameObject: {fileID: 603740403}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0.4, z: 1}
-  m_LocalScale: {x: 2, y: 0.8, z: 1}
+  m_LocalPosition: {x: 0, y: 0.5, z: 1}
+  m_LocalScale: {x: 2, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
@@ -1061,8 +1061,11 @@ MonoBehaviour:
   fingerStiffness: 1
   fingerDamping: 1
   fingerMaxTorque: 500
-  logHandAlignment: 1
-  diagnosticLogInterval: 0.5
+  logJointDriveDiagnostics: 0
+  jointDriveDiagnosticInterval: 0.5
+  diagnosticFingerIndex: 0
+  diagnosticJointIndex: 1
+  logArticulationStateDiagnostics: 0
 --- !u!1 &1169935341
 GameObject:
   m_ObjectHideFlags: 0
@@ -1164,7 +1167,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8372620129679473635, guid: 0886c7611c132684ea26007d1113e53c, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0.84900004
+      value: 1.0769999
       objectReference: {fileID: 0}
     - target: {fileID: 8372620129679473635, guid: 0886c7611c132684ea26007d1113e53c, type: 3}
       propertyPath: m_LocalPosition.z
@@ -1237,7 +1240,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8372620129679473635, guid: 0886c7611c132684ea26007d1113e53c, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0.845
+      value: 1.073
       objectReference: {fileID: 0}
     - target: {fileID: 8372620129679473635, guid: 0886c7611c132684ea26007d1113e53c, type: 3}
       propertyPath: m_LocalPosition.z
@@ -1306,7 +1309,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8372620129679473635, guid: 0886c7611c132684ea26007d1113e53c, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0.866
+      value: 1.0939999
       objectReference: {fileID: 0}
     - target: {fileID: 8372620129679473635, guid: 0886c7611c132684ea26007d1113e53c, type: 3}
       propertyPath: m_LocalPosition.z
@@ -2135,8 +2138,11 @@ MonoBehaviour:
   fingerStiffness: 1
   fingerDamping: 1
   fingerMaxTorque: 500
-  logHandAlignment: 1
-  diagnosticLogInterval: 0.5
+  logJointDriveDiagnostics: 0
+  jointDriveDiagnosticInterval: 0.5
+  diagnosticFingerIndex: 0
+  diagnosticJointIndex: 1
+  logArticulationStateDiagnostics: 0
 --- !u!1001 &7097662409868287624
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -2151,7 +2157,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2960652154540040454, guid: 45b724cdb4580d348b5b9a10d49bd232, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0.875
+      value: 1.1029999
       objectReference: {fileID: 0}
     - target: {fileID: 2960652154540040454, guid: 45b724cdb4580d348b5b9a10d49bd232, type: 3}
       propertyPath: m_LocalPosition.z

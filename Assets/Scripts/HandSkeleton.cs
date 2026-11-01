@@ -366,7 +366,8 @@ public class HandSkeleton : MonoBehaviour
         // Let Unity derive the connected anchor frames from the existing
         // hierarchy. The initial articulation pose is then the hierarchy pose,
         // rather than a manually reconstructed tracked-pose frame.
-        body.matchAnchors = true;
+        body.anchorPosition = Vector3.zero;
+        body.anchorRotation = Quaternion.identity;
 
         if (dof > 0)
         {
@@ -493,18 +494,16 @@ public class HandSkeleton : MonoBehaviour
             return fallback;
 
         Vector3 incomingAxis = incomingBone.normalized;
-        Vector3 flexionAxis =
-            Vector3.ProjectOnPlane(trackedJoint.right, incomingAxis);
+        Vector3 upAxis = Vector3.ProjectOnPlane(
+            trackedJoint.up,
+            incomingAxis);
 
-        if (flexionAxis.sqrMagnitude <= Mathf.Epsilon)
-            flexionAxis = Vector3.ProjectOnPlane(trackedJoint.up, incomingAxis);
-
-        if (flexionAxis.sqrMagnitude <= Mathf.Epsilon)
+        if (upAxis.sqrMagnitude <= Mathf.Epsilon)
             return fallback;
 
-        flexionAxis.Normalize();
-        Vector3 frameUp = Vector3.Cross(incomingAxis, flexionAxis).normalized;
-        return Quaternion.LookRotation(incomingAxis, frameUp);
+        return Quaternion.LookRotation(
+            -incomingAxis,
+            upAxis.normalized);
     }
 
     private void UpdateBoneCollider(int fingerIndex, int jointIndex, CapsuleCollider collider, float boneLength)
@@ -844,18 +843,18 @@ public class HandSkeleton : MonoBehaviour
         Quaternion frame = GetJointFrame(
             trackedJoint,
             incomingBone,
-            Quaternion.LookRotation(incomingBone, trackedJoint.up));
+            Quaternion.identity);
         Vector3 localOutgoing =
             Quaternion.Inverse(frame) * outgoingBone.normalized;
 
-        // The frame's +Z axis is the incoming bone. Decomposing the outgoing
-        // direction in this frame gives the two articulation coordinates
-        // directly, instead of measuring two coupled world-space angles.
-        float denominator = Mathf.Max(Mathf.Abs(localOutgoing.z), 0.0001f);
+        // The frame has +X to the left, +Y up, and -Z along the incoming
+        // bone. With the hand's left-handed anatomical convention, positive
+        // flexion is toward -Y and positive splay is toward +X.
+        float denominator = Mathf.Max(-localOutgoing.z, 0.0001f);
         if (axisType == 0)
             return Mathf.Atan2(-localOutgoing.y, denominator) * Mathf.Rad2Deg;
 
-        return Mathf.Atan2(localOutgoing.x, denominator) * Mathf.Rad2Deg;
+        return -Mathf.Atan2(localOutgoing.x, denominator) * Mathf.Rad2Deg;
     }
 
     private void LogJointDriveDiagnostic(
