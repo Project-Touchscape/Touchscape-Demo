@@ -87,6 +87,15 @@ public static class Utils
 
     public static void GetChainedMassProperties(ArticulationBody root, out float totalMass, out Vector3 com, out Matrix4x4 totalInertia)
     {
+        if (root == null)
+        {
+            totalMass = 0f;
+            com = Vector3.zero;
+            totalInertia = Matrix4x4.zero;
+            Debug.LogError("Cannot calculate chained mass properties without a root ArticulationBody.");
+            return;
+        }
+
         // Get all child bodies and the current body
         ArticulationBody[] bodies = root.GetComponentsInChildren<ArticulationBody>();
 
@@ -199,14 +208,27 @@ public static class Utils
     /// </summary>
     public static Vector3 GetArticulationRightAxis(ArticulationBody body)
     {
-        return body.transform.TransformDirection(
-            body.anchorRotation * Vector3.right).normalized;
+        return GetArticulationAxis(body, Vector3.right);
     }
 
     public static Vector3 GetArticulationUpAxis(ArticulationBody body)
     {
-        return body.transform.TransformDirection(
-            body.anchorRotation * Vector3.up).normalized;
+        return GetArticulationAxis(body, Vector3.up);
+    }
+
+    private static Vector3 GetArticulationAxis(
+        ArticulationBody body,
+        Vector3 localAxis)
+    {
+        Transform parent = body.transform.parent;
+        if (parent == null)
+        {
+            return body.transform.TransformDirection(
+                body.anchorRotation * localAxis).normalized;
+        }
+
+        return parent.TransformDirection(
+            body.parentAnchorRotation * localAxis).normalized;
     }
 
     public static float GetMaxStiffness()

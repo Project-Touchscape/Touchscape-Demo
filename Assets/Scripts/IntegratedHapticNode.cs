@@ -24,6 +24,7 @@ public class IntegratedHapticNode : HapticNode
 
     // ArticulationBody of the physics object
     private ArticulationBody physicsAb;
+    private bool physicsBodyErrorLogged;
 
     // Mass of articulation body
     private float physicsMass;
@@ -53,9 +54,26 @@ public class IntegratedHapticNode : HapticNode
         base.Start();
 
         // Gets physics object rigidbody
-        physicsAb = gameObject.GetComponent<ArticulationBody>();
+        TryGetPhysicsBody();
         UpdateMassProperties();
         UpdateKinematics();
+    }
+
+    private bool TryGetPhysicsBody()
+    {
+        if (physicsAb != null)
+            return true;
+
+        if (gameObject.TryGetComponent<ArticulationBody>(out physicsAb))
+            return true;
+
+        if (!physicsBodyErrorLogged)
+        {
+            Debug.LogError($"[{name}] IntegratedHapticNode requires an ArticulationBody.");
+            physicsBodyErrorLogged = true;
+        }
+
+        return false;
     }
 
     private void SetInitialMassProperties()
@@ -69,6 +87,9 @@ public class IntegratedHapticNode : HapticNode
 
     public void SetChainedMassProperties()
     {
+        if (!TryGetPhysicsBody())
+            return;
+
         Utils.GetChainedMassProperties(physicsAb, out float mass, out Vector3 com, out Matrix4x4 inertia);
         physicsMass = mass;
         physicsInertia = inertia;
@@ -79,6 +100,9 @@ public class IntegratedHapticNode : HapticNode
 
     private void UpdateMassProperties()
     {
+        if (!TryGetPhysicsBody())
+            return;
+
         if (useChainedMass)
             SetChainedMassProperties();
         else
@@ -89,6 +113,9 @@ public class IntegratedHapticNode : HapticNode
     // Fixed update is called once per physics frame
     public void UpdatePhysics()
     {
+        if (!TryGetPhysicsBody())
+            return;
+
         fixedStep++;
         UpdateMassProperties();
 

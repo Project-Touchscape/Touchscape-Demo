@@ -76,10 +76,14 @@ public class HandSkeleton : MonoBehaviour
     public float jointLogInterval = 0.5f;
     private float nextJointLogTime;*/
 
-    [Header("Hand Alignment Diagnostics")]
-    public bool logHandAlignment = true;
-    [Min(0.05f)] public float diagnosticLogInterval = 0.5f;
-    private float nextDiagnosticLogTime;
+    [Header("Joint Drive Diagnostics")]
+    public bool logJointDriveDiagnostics = true;
+    [Min(0.05f)] public float jointDriveDiagnosticInterval = 0.5f;
+    [Min(0)] public int diagnosticFingerIndex = 0;
+    [Min(0)] public int diagnosticJointIndex = 1;
+    private float nextJointDriveDiagnosticTime;
+    public bool logArticulationStateDiagnostics = false;
+    private float nextArticulationStateDiagnosticTime;
 
     private IntegratedHapticNode rootNode;
 
@@ -99,6 +103,11 @@ public class HandSkeleton : MonoBehaviour
     private Vector3[] fingertipForces = new Vector3[N_FINGERS];
     private Vector3[] prevFingertipInertialForces = new Vector3[N_FINGERS];
     private Vector3[] fingertipInertialForces = new Vector3[N_FINGERS];
+
+    // The metacarpal has no anatomical parent bone in the tracked finger
+    // hierarchy. Its first observed pose is therefore the zero reference.
+    private readonly float[,] metacarpalReferenceAngles = new float[N_FINGERS, 2];
+    private readonly bool[,] metacarpalReferencesInitialized = new bool[N_FINGERS, 2];
 
     private bool prevUseGravity = false;
 
@@ -142,8 +151,6 @@ public class HandSkeleton : MonoBehaviour
             rootNode.UpdatePhysics();
         }
 
-        int jointID = 0;
-
         // Update the articulation bodies' target angles based on the tracked joint rotations
         for (int fingerIndex = 0; fingerIndex < Mathf.Min(N_FINGERS, fingers.Length); fingerIndex++)
         {
@@ -153,27 +160,35 @@ public class HandSkeleton : MonoBehaviour
             Transform trackedJoint = trackedFingers[fingerIndex];
 
             if (trackedJoint == null || currentJoint == null)
-                break;
+                continue;
 
             for (int jointIndex = 0; jointIndex < N_ACTIVE_BONES; jointIndex++)
             {
                 // Update the articulation body's target angle based on the tracked joint's rotation
                 UpdateJointParams(
                     fingerIndex,
-                    jointID,
                     jointIndex,
                     currentJoint,
                     trackedJoint);
 
-                // Move to the next joint in the finger hierarchy
-                currentJoint = currentJoint.transform.GetChild(0).gameObject;
-                trackedJoint = trackedJoint.GetChild(0);
-                jointID++;
+                // Move to the next joint in the finger hierarchy.
+                Transform nextPhysicsJoint = GetBoneChild(currentJoint.transform);
+                Transform nextTrackedJoint = GetBoneChild(trackedJoint);
+                if (nextPhysicsJoint == null || nextTrackedJoint == null)
+                    break;
+
+                currentJoint = nextPhysicsJoint.gameObject;
+                trackedJoint = nextTrackedJoint;
             }
 
             // Updates fingertip haptic node
             UpdateFingertipNode(fingerIndex);
         }
+    }
+
+    private bool IsThumb(int fingerIndex)
+    {
+        return fingerIndex == N_FINGERS - 1;
     }
 
     private void ConstructPalm()
@@ -286,17 +301,16 @@ public class HandSkeleton : MonoBehaviour
                     break;
 
                 ConstructFingerJoint(fingerIndex, jointIndex, currentJoint);
-                currentJoint = currentJoint.transform.GetChild(0).gameObject;
+                if (GetBoneChild(currentJoint.transform) == null)
+                    break;
+
+                currentJoint = GetBoneChild(currentJoint.transform).gameObject;
             }
 
             // Constructs haptic node for the fingertip
-            ConstructFingertipNode(fingerIndex, currentJoint);
+            if (currentJoint != null)
+                ConstructFingertipNode(fingerIndex, currentJoint);
         }
-    }
-
-    private bool IsThumb(int fingerIndex)
-    {
-        return fingerIndex == N_FINGERS - 1;
     }
 
     private void ConstructFingerJoint(int fingerIndex, int jointIndex, GameObject currentJoint)
@@ -305,7 +319,6 @@ public class HandSkeleton : MonoBehaviour
         int dof = perJointDOF[jointIndex];
 
         Transform jointTransform = currentJoint.transform;
-        Transform parentTransform = jointTransform.parent;
 
         Vector3 boneDirection = GetBoneVector(jointTransform);
 
@@ -335,7 +348,7 @@ public class HandSkeleton : MonoBehaviour
         if (capsule == null)
             capsule = colliderTransform.gameObject.AddComponent<CapsuleCollider>();
 
-        UpdateBoneCollider(isThumb, jointIndex, capsule, boneDirection.magnitude);
+        UpdateBoneCollider(fingerIndex, jointIndex, capsule, boneDirection.magnitude);
 
         // Create the articulation body.
         if (!currentJoint.TryGetComponent<ArticulationBody>(out var body))
@@ -350,47 +363,10 @@ public class HandSkeleton : MonoBehaviour
         body.solverIterations = 60;
         body.solverVelocityIterations = 20;
 
-        // Configure anchors with a consistent reference frame.
-        body.matchAnchors = false;
-
-        body.anchorPosition = Vector3.zero;
-
-        // The parent and child anchors share the same world-space position.
-        Vector3 worldJointPosition = jointTransform.position;
-
-        if (parentTransform != null)
-        {
-            body.parentAnchorPosition =
-                parentTransform.InverseTransformPoint(worldJointPosition);
-
-            // Define the reference frame from the incoming bone.
-            Vector3 incomingDirection =
-                (jointTransform.position - parentTransform.position).normalized;
-
-            Vector3 outgoingDirection = GetBoneVector(jointTransform).normalized;
-
-            Vector3 referenceUp = jointTransform.up;
-
-            Quaternion referenceRotation =
-                Quaternion.LookRotation(incomingDirection, referenceUp);
-
-            body.parentAnchorRotation =
-                Quaternion.Inverse(parentTransform.rotation) * referenceRotation;
-
-            body.anchorRotation =
-                Quaternion.Inverse(jointTransform.rotation) * referenceRotation;
-
-            // Measure the initial bend relative to the reference frame.
-            float initialAngle = Vector3.SignedAngle(
-                incomingDirection,
-                outgoingDirection,
-                referenceRotation * Vector3.right
-            );
-
-            Debug.Log(
-                $"{jointTransform.name}: initial bend angle = {initialAngle:F2} degrees"
-            );
-        }
+        // Let Unity derive the connected anchor frames from the existing
+        // hierarchy. The initial articulation pose is then the hierarchy pose,
+        // rather than a manually reconstructed tracked-pose frame.
+        body.matchAnchors = true;
 
         if (dof > 0)
         {
@@ -454,6 +430,9 @@ public class HandSkeleton : MonoBehaviour
 
     private void ConstructFingertipNode(int fingerIndex, GameObject currentJoint)
     {
+        if (currentJoint == null || trackedFingers[fingerIndex] == null)
+            return;
+
         if (!currentJoint.TryGetComponent<HapticNode>(out HapticNode node))
             node = currentJoint.AddComponent<HapticNode>();
 
@@ -462,8 +441,13 @@ public class HandSkeleton : MonoBehaviour
 
         for (int i = 0; i < N_ACTIVE_BONES; i++)
         {
-            trackedJoint = trackedJoint.childCount > 0 ? trackedJoint.GetChild(0) : null;
+            trackedJoint = GetBoneChild(trackedJoint);
+            if (trackedJoint == null)
+                break;
         }
+
+        if (trackedJoint == null)
+            return;
 
         node.haptics = haptics;
         node.trackedTransform = trackedJoint;
@@ -477,7 +461,7 @@ public class HandSkeleton : MonoBehaviour
     /// <returns>The direction of the bone.</returns>
     private Vector3 GetBoneVector(Transform currentJoint)
     {
-        Transform nextJoint = currentJoint.childCount > 0 ? currentJoint.GetChild(0) : null;
+        Transform nextJoint = GetBoneChild(currentJoint);
 
         if (nextJoint == null)
             return currentJoint.forward;
@@ -485,10 +469,48 @@ public class HandSkeleton : MonoBehaviour
         return nextJoint.position - currentJoint.position;
     }
 
-    private void UpdateBoneCollider(bool isThumb, int jointIndex, CapsuleCollider collider, float boneLength)
+    private Transform GetBoneChild(Transform joint)
+    {
+        if (joint == null)
+            return null;
+
+        for (int childIndex = 0; childIndex < joint.childCount; childIndex++)
+        {
+            Transform child = joint.GetChild(childIndex);
+            if (child.name != FingerColliderName)
+                return child;
+        }
+
+        return null;
+    }
+
+    private Quaternion GetJointFrame(
+        Transform trackedJoint,
+        Vector3 incomingBone,
+        Quaternion fallback)
+    {
+        if (incomingBone.sqrMagnitude <= Mathf.Epsilon)
+            return fallback;
+
+        Vector3 incomingAxis = incomingBone.normalized;
+        Vector3 flexionAxis =
+            Vector3.ProjectOnPlane(trackedJoint.right, incomingAxis);
+
+        if (flexionAxis.sqrMagnitude <= Mathf.Epsilon)
+            flexionAxis = Vector3.ProjectOnPlane(trackedJoint.up, incomingAxis);
+
+        if (flexionAxis.sqrMagnitude <= Mathf.Epsilon)
+            return fallback;
+
+        flexionAxis.Normalize();
+        Vector3 frameUp = Vector3.Cross(incomingAxis, flexionAxis).normalized;
+        return Quaternion.LookRotation(incomingAxis, frameUp);
+    }
+
+    private void UpdateBoneCollider(int fingerIndex, int jointIndex, CapsuleCollider collider, float boneLength)
     {
         // Gets the bone width for the current joint
-        float boneWidth = isThumb ? thumbBoneWidths[jointIndex] : fingerBoneWidths[jointIndex];
+        float boneWidth = IsThumb(fingerIndex) ? thumbBoneWidths[jointIndex] : fingerBoneWidths[jointIndex];
 
         // Shortens the bone length for the last joint to be tangent to the fingertip
         if (jointIndex == N_ACTIVE_BONES - 1)
@@ -513,7 +535,6 @@ public class HandSkeleton : MonoBehaviour
     /// <returns>The direction of the bone.</returns>
     private void UpdateJointParams(
         int fingerIndex,
-        int jointID,
         int jointIndex,
         GameObject currentJoint,
         Transform trackedJoint)
@@ -521,26 +542,21 @@ public class HandSkeleton : MonoBehaviour
         if (currentJoint == null || trackedJoint == null)
             return;
 
-        // Ensures finger root joint position is aligned with the tracked hand
+        // The XR hand can change both its pose and its proportions as tracking
+        // confidence and the estimated skeleton change. Keep the root and bone
+        // geometry aligned, while leaving joint rotation to the articulation
+        // drives below.
         if (jointIndex == 0)
-        {
-            alignJointPosition(currentJoint.transform, trackedJoint);
-        }
+            AlignJointPosition(currentJoint.transform, trackedJoint);
 
-        // Updates other joint positions and collider to account for potential changes in bone length
-        float boneLength = updateBoneLength(currentJoint.transform, trackedJoint);
-
+        float boneLength = UpdateBoneLength(currentJoint.transform, trackedJoint);
         Transform colliderTransform = currentJoint.transform.Find(FingerColliderName);
         CapsuleCollider collider = colliderTransform == null
             ? null
             : colliderTransform.GetComponent<CapsuleCollider>();
 
-        if (collider != null)
-        {
-            UpdateBoneCollider(IsThumb(fingerIndex), jointIndex, collider, boneLength);
-        }
-
-        LogJointAlignment(fingerIndex, jointIndex, currentJoint, trackedJoint);
+        if (collider != null && boneLength > Mathf.Epsilon)
+            UpdateBoneCollider(fingerIndex, jointIndex, collider, boneLength);
 
         float dof = perJointDOF[jointIndex];
         ArticulationBody body = currentJoint.GetComponent<ArticulationBody>();
@@ -556,17 +572,15 @@ public class HandSkeleton : MonoBehaviour
             // articulation drive rotates around this axis, and using trackedJoint.right
             // here can introduce a thumb flexion offset when the two rigs use different
             // local axes.
-            Vector3 trackedBoneDirection = GetBoneVector(trackedJoint);
-            Vector3 parentBoneDirection = GetBoneVector(trackedJoint.parent);
 
             body.xDrive = UpdateAxisDrive(
                 body,
                 body.xDrive,
                 trackedJoint,
-                parentBoneDirection,
-                trackedBoneDirection,
+                trackedJoint.parent,
                 fingerIndex,
-                0);
+                0,
+                jointIndex == 0);
 
             if (dof > 1)
             {
@@ -574,10 +588,10 @@ public class HandSkeleton : MonoBehaviour
                     body,
                     body.yDrive,
                     trackedJoint,
-                    parentBoneDirection,
-                    trackedBoneDirection,
+                    trackedJoint.parent,
                     fingerIndex,
-                    1);
+                    1,
+                    jointIndex == 0);
 
                 /*if (logSplayJoint &&
                     fingerIndex == debugFingerIndex &&
@@ -600,18 +614,33 @@ public class HandSkeleton : MonoBehaviour
         }
     }
 
-    private void alignJointPosition(Transform physicsJoint, Transform trackedJoint)
+    private void AlignJointPosition(Transform physicsJoint, Transform trackedJoint)
     {
-        Vector3 trackedRelPos = trackedRoot.InverseTransformPoint(trackedJoint.position);
-        physicsJoint.position = gameObject.transform.TransformPoint(trackedRelPos);
+        if (trackedRoot == null)
+            return;
+
+        Vector3 trackedRelativePosition =
+            trackedRoot.InverseTransformPoint(trackedJoint.position);
+        physicsJoint.position =
+            gameObject.transform.TransformPoint(trackedRelativePosition);
     }
 
-    private float updateBoneLength(Transform physicsJoint, Transform trackedJoint)
+    private float UpdateBoneLength(Transform physicsJoint, Transform trackedJoint)
     {
-        float trackedBoneLength = GetBoneVector(trackedJoint).magnitude;
-        Transform child = physicsJoint.GetChild(0);
-        child.localPosition = child.localPosition.normalized * trackedBoneLength;
+        Transform physicsChild = GetBoneChild(physicsJoint);
+        Vector3 trackedBone = GetBoneVector(trackedJoint);
+        float trackedBoneLength = trackedBone.magnitude;
 
+        if (physicsChild == null || trackedBoneLength <= Mathf.Epsilon)
+            return trackedBoneLength;
+
+        Vector3 localDirection = physicsChild.localPosition;
+        if (localDirection.sqrMagnitude <= Mathf.Epsilon)
+            localDirection = Vector3.forward;
+        else
+            localDirection.Normalize();
+
+        physicsChild.localPosition = localDirection * trackedBoneLength;
         return trackedBoneLength;
     }
 
@@ -619,33 +648,108 @@ public class HandSkeleton : MonoBehaviour
         ArticulationBody body,
         ArticulationDrive drive,
         Transform trackedJoint,
-        Vector3 parentBoneDirection,
-        Vector3 trackedBoneDirection,
+        Transform parentJoint,
         int fingerIndex,
-        int axisType)
+        int axisType,
+        bool isMetacarpal)
     {
-        Vector3 trackedRight = Vector3.Cross(trackedJoint.up, trackedBoneDirection).normalized;
-        Vector3 trackedAxis = Vector3.zero;
-        Vector3 axis = Vector3.zero;
+        if (parentJoint == null)
+            return drive;
 
-        if (axisType == 0)
-        {
-            trackedAxis = trackedRight;
-            axis = Utils.GetArticulationRightAxis(body);
-        }
-        else if (axisType == 1)
-        {
-            trackedAxis = Vector3.Cross(trackedBoneDirection, trackedRight).normalized;
-            axis = Utils.GetArticulationUpAxis(body);
-        }
+        Vector3 incomingBone = trackedJoint.position - parentJoint.position;
+        Vector3 outgoingBone = GetBoneVector(trackedJoint);
 
-        // Note: positive angles are flexion, negative angles are extension. The initial angle is subtracted from the target to make the joint's current position the zero point for the drive.
-        float targetAngle = Vector3.SignedAngle(
-            parentBoneDirection,
-            trackedBoneDirection,
-            trackedAxis);
+        Vector3 axis = axisType == 0
+            ? Utils.GetArticulationRightAxis(body)
+            : Utils.GetArticulationUpAxis(body);
+        float trackedAngle = GetTrackedDriveAngle(
+            trackedJoint,
+            incomingBone,
+            outgoingBone,
+            axisType);
+
+        float targetAngle = trackedAngle;
+        if (isMetacarpal)
+        {
+            if (!metacarpalReferencesInitialized[fingerIndex, axisType] &&
+                incomingBone.sqrMagnitude > Mathf.Epsilon &&
+                outgoingBone.sqrMagnitude > Mathf.Epsilon)
+            {
+                metacarpalReferenceAngles[fingerIndex, axisType] = trackedAngle;
+                metacarpalReferencesInitialized[fingerIndex, axisType] = true;
+            }
+
+            if (metacarpalReferencesInitialized[fingerIndex, axisType])
+            {
+                targetAngle = Mathf.DeltaAngle(
+                    metacarpalReferenceAngles[fingerIndex, axisType],
+                    trackedAngle);
+            }
+        }
+        else
+        {
+            Vector3 physicsOutgoing = GetBoneVector(body.transform);
+            float currentAngle = body.jointPosition.dofCount > axisType
+                ? body.jointPosition[axisType] * Mathf.Rad2Deg
+                : 0f;
+
+            if (physicsOutgoing.sqrMagnitude > Mathf.Epsilon &&
+                outgoingBone.sqrMagnitude > Mathf.Epsilon)
+            {
+                // The physics bone can have a fixed local orientation offset
+                // from the articulation anchor frame. Correct from the
+                // measured physical bone so the target describes the actual
+                // pose, not an assumed +Z rest direction.
+                float geometricCorrection = Vector3.SignedAngle(
+                    physicsOutgoing,
+                    outgoingBone,
+                    axis);
+                targetAngle = currentAngle + geometricCorrection;
+            }
+        }
 
         drive.target = targetAngle;
+
+        if (logJointDriveDiagnostics &&
+            !isMetacarpal &&
+            fingerIndex == diagnosticFingerIndex &&
+            axisType == 0 &&
+            diagnosticJointIndex >= 1 &&
+            Time.time >= nextJointDriveDiagnosticTime)
+        {
+            nextJointDriveDiagnosticTime =
+                Time.time + jointDriveDiagnosticInterval;
+            LogJointDriveDiagnostic(
+                body,
+                trackedJoint,
+                parentJoint,
+                incomingBone,
+                outgoingBone,
+                axis,
+                trackedAngle,
+                targetAngle,
+                fingerIndex,
+                diagnosticJointIndex);
+        }
+
+        if (logArticulationStateDiagnostics &&
+            !isMetacarpal &&
+            fingerIndex == diagnosticFingerIndex &&
+            axisType == 0 &&
+            diagnosticJointIndex >= 1 &&
+            Time.time >= nextArticulationStateDiagnosticTime)
+        {
+            nextArticulationStateDiagnosticTime =
+                Time.time + jointDriveDiagnosticInterval;
+            LogArticulationStateDiagnostic(
+                body,
+                trackedJoint,
+                parentJoint,
+                incomingBone,
+                outgoingBone,
+                fingerIndex,
+                diagnosticJointIndex);
+        }
 
         // Update stiffness and damping in case they have changed
 
@@ -675,12 +779,19 @@ public class HandSkeleton : MonoBehaviour
         driveTorque = Mathf.Clamp(driveTorque, -drive.forceLimit, drive.forceLimit);
 
         HapticNode fingertipNode = fingertipNodes[fingerIndex];
+        if (fingertipNode == null)
+            return drive;
+
         Vector3 jointToFingertip =
             fingertipNode.transform.position - jointPoint;
 
         // Gets relationship between joint torque and fingertip force
         Vector3 jacobianColumn = Vector3.Cross(axis, jointToFingertip);
-        jacobianColumn /= jacobianColumn.sqrMagnitude;
+        float jacobianMagnitudeSquared = jacobianColumn.sqrMagnitude;
+        if (jacobianMagnitudeSquared <= Mathf.Epsilon)
+            return drive;
+
+        jacobianColumn /= jacobianMagnitudeSquared;
 
         // Gets force at fingertip
         fingertipForces[fingerIndex] += jacobianColumn * driveTorque;
@@ -720,6 +831,144 @@ public class HandSkeleton : MonoBehaviour
         return drive;
     }
 
+    private float GetTrackedDriveAngle(
+        Transform trackedJoint,
+        Vector3 incomingBone,
+        Vector3 outgoingBone,
+        int axisType)
+    {
+        if (incomingBone.sqrMagnitude <= Mathf.Epsilon ||
+            outgoingBone.sqrMagnitude <= Mathf.Epsilon)
+            return 0f;
+
+        Quaternion frame = GetJointFrame(
+            trackedJoint,
+            incomingBone,
+            Quaternion.LookRotation(incomingBone, trackedJoint.up));
+        Vector3 localOutgoing =
+            Quaternion.Inverse(frame) * outgoingBone.normalized;
+
+        // The frame's +Z axis is the incoming bone. Decomposing the outgoing
+        // direction in this frame gives the two articulation coordinates
+        // directly, instead of measuring two coupled world-space angles.
+        float denominator = Mathf.Max(Mathf.Abs(localOutgoing.z), 0.0001f);
+        if (axisType == 0)
+            return Mathf.Atan2(-localOutgoing.y, denominator) * Mathf.Rad2Deg;
+
+        return Mathf.Atan2(localOutgoing.x, denominator) * Mathf.Rad2Deg;
+    }
+
+    private void LogJointDriveDiagnostic(
+        ArticulationBody body,
+        Transform trackedJoint,
+        Transform parentJoint,
+        Vector3 incomingBone,
+        Vector3 outgoingBone,
+        Vector3 axis,
+        float trackedAngle,
+        float targetAngle,
+        int fingerIndex,
+        int jointIndex)
+    {
+        float actualAngle = body.jointPosition.dofCount > 0
+            ? body.jointPosition[0] * Mathf.Rad2Deg
+            : float.NaN;
+        float sameAxisAngle = Vector3.SignedAngle(
+            incomingBone,
+            outgoingBone,
+            axis);
+        float oppositeAxisAngle = Vector3.SignedAngle(
+            incomingBone,
+            outgoingBone,
+            -axis);
+        float axisIncomingAlignment = Vector3.Dot(
+            axis.normalized,
+            incomingBone.normalized);
+        Vector3 physicsIncoming = body.transform.position - parentJoint.position;
+        Vector3 physicsOutgoing = GetBoneVector(body.transform);
+
+        Debug.Log(
+            $"[HandSkeleton DRIVE DIAG] finger={fingerIndex}, joint={jointIndex}, " +
+            $"physics='{body.name}', tracked='{trackedJoint.name}'\n" +
+            $"target={targetAngle:F2} deg, trackedAngle={trackedAngle:F2} deg, " +
+            $"actual={actualAngle:F2} deg, error={Mathf.DeltaAngle(actualAngle, targetAngle):F2} deg\n" +
+            $"axis={axis}, incoming={incomingBone.normalized}, outgoing={outgoingBone.normalized}\n" +
+            $"sameAxis={sameAxisAngle:F2} deg, oppositeAxis={oppositeAxisAngle:F2} deg\n" +
+            $"axisIncomingDot={axisIncomingAlignment:F3} " +
+            $"(0 is perpendicular)\n" +
+            $"physicsIncoming={physicsIncoming.normalized}, " +
+            $"physicsOutgoing={physicsOutgoing.normalized}\n" +
+            $"anchorRotation={body.anchorRotation.eulerAngles}, " +
+            $"limits=[{body.xDrive.lowerLimit:F2},{body.xDrive.upperLimit:F2}], " +
+            $"jointPositionDof={body.jointPosition.dofCount}");
+    }
+
+    private void LogArticulationStateDiagnostic(
+        ArticulationBody body,
+        Transform trackedJoint,
+        Transform parentJoint,
+        Vector3 trackedIncoming,
+        Vector3 trackedOutgoing,
+        int fingerIndex,
+        int jointIndex)
+    {
+        ArticulationReducedSpace position = body.jointPosition;
+        Vector3 parentAxisX = Utils.GetArticulationRightAxis(body);
+        Vector3 parentAxisY = Utils.GetArticulationUpAxis(body);
+        Vector3 parentAxisZ = Vector3.Cross(parentAxisX, parentAxisY).normalized;
+
+        Vector3 parentAnchorWorld =
+            body.transform.parent != null
+                ? body.transform.parent.TransformPoint(body.parentAnchorPosition)
+                : body.transform.TransformPoint(body.anchorPosition);
+        Vector3 childAnchorWorld =
+            body.transform.TransformPoint(body.anchorPosition);
+        Quaternion parentFrameWorld =
+            body.transform.parent != null
+                ? body.transform.parent.rotation * body.parentAnchorRotation
+                : body.transform.rotation * body.anchorRotation;
+        Quaternion childFrameWorld =
+            body.transform.rotation * body.anchorRotation;
+        Quaternion relativeFrame =
+            Quaternion.Inverse(parentFrameWorld) * childFrameWorld;
+
+        Vector3 physicsIncoming =
+            body.transform.position - parentJoint.position;
+        Vector3 physicsOutgoing = GetBoneVector(body.transform);
+
+        string dofs = position.dofCount == 0
+            ? "none"
+            : $"[{GetJointPosition(position, 0):F3}, " +
+              $"{GetJointPosition(position, 1):F3}, " +
+              $"{GetJointPosition(position, 2):F3}] rad";
+
+        Debug.Log(
+            $"[HandSkeleton ARTICULATION DIAG] finger={fingerIndex}, " +
+            $"joint={jointIndex}, body='{body.name}', tracked='{trackedJoint.name}'\n" +
+            $"trackedIncoming={trackedIncoming.normalized}, " +
+            $"trackedOutgoing={trackedOutgoing.normalized}\n" +
+            $"physicsIncoming={physicsIncoming.normalized}, " +
+            $"physicsOutgoing={physicsOutgoing.normalized}\n" +
+            $"jointPosition={dofs}, jointVelocity={body.jointVelocity}\n" +
+            $"parentAnchorWorld={parentAnchorWorld}, " +
+            $"childAnchorWorld={childAnchorWorld}, " +
+            $"anchorDelta={(childAnchorWorld - parentAnchorWorld).magnitude:F5}\n" +
+            $"parentAxisX={parentAxisX}, parentAxisY={parentAxisY}, " +
+            $"parentAxisZ={parentAxisZ}\n" +
+            $"parentFrame={parentFrameWorld.eulerAngles}, " +
+            $"childFrame={childFrameWorld.eulerAngles}, " +
+            $"relativeFrame={relativeFrame.eulerAngles}\n" +
+            $"trackedJointWorld={trackedJoint.position}, " +
+            $"physicsJointWorld={body.transform.position}");
+    }
+
+    private float GetJointPosition(
+        ArticulationReducedSpace position,
+        int index)
+    {
+        return position.dofCount > index ? position[index] : 0f;
+    }
+
     private void UpdateFingertipNode(int fingerIndex)
     {
         HapticNode node = fingertipNodes[fingerIndex];
@@ -753,111 +1002,5 @@ public class HandSkeleton : MonoBehaviour
         fingertipLinearMomenta[fingerIndex] = Vector3.zero;
         fingertipForces[fingerIndex] = Vector3.zero;
         fingertipInertialForces[fingerIndex] = Vector3.zero;
-    }
-
-    private void LogSplayJoint(
-        int fingerIndex,
-        int jointIndex,
-        GameObject currentJoint,
-        Transform trackedJoint,
-        ArticulationBody body,
-        Vector3 trackedParentBoneDirection,
-        Vector3 trackedBoneDirection,
-        Vector3 flexionAxis,
-        Vector3 splayAxis)
-    {
-        Vector3 physicsBoneDirection = GetBoneVector(currentJoint.transform);
-        Vector3 physicsParentBoneDirection = GetBoneVector(
-            currentJoint.transform.parent);
-
-        float currentFlexionAngle = Vector3.SignedAngle(
-            physicsParentBoneDirection,
-            physicsBoneDirection,
-            flexionAxis);
-
-        float currentSplayAngle = Vector3.SignedAngle(
-            physicsParentBoneDirection,
-            physicsBoneDirection,
-            splayAxis);
-
-        float targetFlexionAngle = Vector3.SignedAngle(
-            trackedParentBoneDirection,
-            trackedBoneDirection,
-            flexionAxis);
-
-        float targetSplayAngle = Vector3.SignedAngle(
-            trackedParentBoneDirection,
-            trackedBoneDirection,
-            splayAxis);
-
-        ArticulationDrive flexionDrive = body.xDrive;
-        ArticulationDrive splayDrive = body.yDrive;
-
-        Debug.Log(
-            $"[HandSkeleton] Splay joint debug\n" +
-            $"Finger index: {fingerIndex}, joint index: {jointIndex}\n" +
-            $"Physics joint: {currentJoint.name}, tracked joint: {trackedJoint.name}\n" +
-            $"Physics position: {currentJoint.transform.position}, " +
-            $"tracked position: {trackedJoint.position}\n" +
-            $"Physics bone: {physicsBoneDirection}, " +
-            $"tracked bone: {trackedBoneDirection}\n" +
-            $"Physics parent bone: {physicsParentBoneDirection}, " +
-            $"tracked parent bone: {trackedParentBoneDirection}\n" +
-            $"Flexion axis: {flexionAxis}, splay axis: {splayAxis}\n" +
-            $"Flexion current: {currentFlexionAngle:F3}, " +
-            $"flexion target: {targetFlexionAngle:F3}, " +
-            $"flexion drive target: {flexionDrive.target:F3}\n" +
-            $"Splay current: {currentSplayAngle:F3}, " +
-            $"splay target: {targetSplayAngle:F3}, " +
-            $"splay drive target: {splayDrive.target:F3}\n"
-            );
-    }
-
-    private void LogJointAlignment(
-        int fingerIndex,
-        int jointIndex,
-        GameObject physicsJoint,
-        Transform trackedJoint)
-    {
-        Transform p = physicsJoint.transform;
-        ArticulationBody body = physicsJoint.GetComponent<ArticulationBody>();
-
-        Vector3 physicsBone = GetBoneVector(p);
-        Vector3 trackedBone = GetBoneVector(trackedJoint);
-
-        Vector3 physicsIncoming = p.parent != null ? p.position - p.parent.position : p.forward;
-        Vector3 trackedIncoming = trackedJoint.parent != null
-            ? trackedJoint.position - trackedJoint.parent.position
-            : trackedJoint.forward;
-
-        float directionError = physicsBone.sqrMagnitude > Mathf.Epsilon && trackedBone.sqrMagnitude > Mathf.Epsilon
-            ? Vector3.Angle(physicsBone, trackedBone)
-            : float.NaN;
-
-        float incomingDirectionError = physicsIncoming.sqrMagnitude > Mathf.Epsilon && trackedIncoming.sqrMagnitude > Mathf.Epsilon
-            ? Vector3.Angle(physicsIncoming, trackedIncoming)
-            : float.NaN;
-
-        string drives = body == null
-            ? "ArticulationBody=<missing>"
-            : $"jointType={body.jointType}, dof={(body.jointPosition.dofCount)}, " +
-              $"xTarget={body.xDrive.target:F2}, xActual={(body.jointPosition.dofCount > 0 ? body.jointPosition[0] : 0f):F2}, " +
-              $"xLimits=[{body.xDrive.lowerLimit:F2},{body.xDrive.upperLimit:F2}], " +
-              $"yTarget={body.yDrive.target:F2}, yActual={(body.jointPosition.dofCount > 1 ? body.jointPosition[1] : 0f):F2}, " +
-              $"yLimits=[{body.yDrive.lowerLimit:F2},{body.yDrive.upperLimit:F2}]";
-
-        Debug.Log(
-            $"[HandSkeleton DIAG ALIGN] finger={fingerIndex}, joint={jointIndex}, " +
-            $"physics='{p.name}', tracked='{trackedJoint.name}'\n" +
-            $"positionError={(p.position - trackedJoint.position).magnitude * 1000f:F2} mm, " +
-            $"physicsPos={p.position:F4}, trackedPos={trackedJoint.position:F4}\n" +
-            $"boneLengths: physics={physicsBone.magnitude:F5} m, tracked={trackedBone.magnitude:F5} m, " +
-            $"delta={(physicsBone.magnitude - trackedBone.magnitude):F5} m, " +
-            $"outgoingDirectionError={directionError:F2} deg\n" +
-            $"incomingLengths: physics={physicsIncoming.magnitude:F5} m, tracked={trackedIncoming.magnitude:F5} m, " +
-            $"incomingDirectionError={incomingDirectionError:F2} deg\n" +
-            $"physicsBone={physicsBone}, trackedBone={trackedBone}\n" +
-            $"physicsIncoming={physicsIncoming}, trackedIncoming={trackedIncoming}\n" +
-            drives);
     }
 }
