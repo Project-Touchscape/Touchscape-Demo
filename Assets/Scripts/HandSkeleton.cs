@@ -68,7 +68,7 @@ public class HandSkeleton : MonoBehaviour
 
     [Header("Articulation Chain Rebuild")]
     [Min(0.0001f)] public float rootPositionRebuildThreshold = 0.002f;
-    [Min(0.0001f)] public float boneLengthRebuildThreshold = 0.001f;
+    [Min(0.0001f)] public float boneLengthRebuildThreshold = 0.002f;
 
     /*[Header("Joint Debug")]
     public bool logSplayJoint = false;
@@ -108,22 +108,20 @@ public class HandSkeleton : MonoBehaviour
     private Vector3[] prevFingertipInertialForces = new Vector3[N_FINGERS];
     private Vector3[] fingertipInertialForces = new Vector3[N_FINGERS];
 
-    // The metacarpal has no anatomical parent bone in the tracked finger
-    // hierarchy. Its first observed pose is therefore the zero reference.
-    private readonly float[,] metacarpalReferenceAngles = new float[N_FINGERS, 2];
-    private readonly bool[,] metacarpalReferencesInitialized = new bool[N_FINGERS, 2];
-
     private bool prevUseGravity = false;
     private Vector3[] builtFingerRootPositions = new Vector3[N_FINGERS];
     private float[,] builtBoneLengths = new float[N_FINGERS, N_ACTIVE_BONES];
+    private float[,,] initialJointOffsets =
+        new float[N_FINGERS, N_ACTIVE_BONES, 2];
     private bool hasBuiltGeometry;
+    private bool hasInitialJointOffsets;
 
     void Start()
     {
         // Initialize palm articulation body and collider
         ConstructPalm();
         ConstructFingers();
-        CaptureBuiltGeometry();
+        CaptureFingerState();
     }
 
     void Update()
@@ -133,8 +131,8 @@ public class HandSkeleton : MonoBehaviour
 
     void FixedUpdate()
     {
-        if (HasTrackedGeometryChanged()) {
-            RebuildArticulationChain();
+        if (HasFingerGeometryChanged()) {
+            RebuildFingers();
 
             // Logs warning
             Debug.LogWarning("Tracked geometry has changed. Rebuilding articulation chain.");
@@ -215,43 +213,37 @@ public class HandSkeleton : MonoBehaviour
         return fingerIndex == N_FINGERS - 1;
     }
 
-    private bool HasTrackedGeometryChanged()
+    private bool HasFingerGeometryChanged()
     {
         if (trackedRoot == null || fingers == null || trackedFingers == null)
             return false;
 
-        for (int fingerIndex = 0;
-             fingerIndex < Mathf.Min(
-                 N_FINGERS,
-                 Mathf.Min(fingers.Length, trackedFingers.Length));
-             fingerIndex++)
+        if (!hasBuiltGeometry)
+            return true;
+
+        int fingerCount = Mathf.Min(
+            N_FINGERS,
+            Mathf.Min(fingers.Length, trackedFingers.Length));
+        for (int fingerIndex = 0; fingerIndex < fingerCount; fingerIndex++)
         {
             Transform trackedFinger = trackedFingers[fingerIndex];
             if (trackedFinger == null)
                 continue;
 
-            Vector3 rootPosition = trackedRoot.InverseTransformPoint(
-                trackedFinger.position);
-            if (!hasBuiltGeometry ||
-                Vector3.Distance(
-                    rootPosition,
-                    builtFingerRootPositions[fingerIndex]) >
-                rootPositionRebuildThreshold)
+            Vector3 rootPosition = trackedRoot.InverseTransformPoint(trackedFinger.position);
+            if (Vector3.Distance(rootPosition, builtFingerRootPositions[fingerIndex]) > rootPositionRebuildThreshold)
             {
                 return true;
             }
 
             Transform trackedJoint = trackedFinger;
-            for (int jointIndex = 0;
-                 jointIndex < N_ACTIVE_BONES;
-                 jointIndex++)
+            for (int jointIndex = 0; jointIndex < N_ACTIVE_BONES; jointIndex++)
             {
+                if (trackedJoint == null)
+                    break;
+
                 float length = GetBoneVector(trackedJoint).magnitude;
-                if (!hasBuiltGeometry ||
-                    Mathf.Abs(
-                        length -
-                        builtBoneLengths[fingerIndex, jointIndex]) >
-                    boneLengthRebuildThreshold)
+                if (Mathf.Abs(length - builtBoneLengths[fingerIndex, jointIndex]) > boneLengthRebuildThreshold)
                 {
                     return true;
                 }
@@ -265,53 +257,18 @@ public class HandSkeleton : MonoBehaviour
         return false;
     }
 
-    private void CaptureBuiltGeometry()
-    {
-        if (trackedRoot == null || trackedFingers == null)
-            return;
-
-        for (int fingerIndex = 0;
-             fingerIndex < Mathf.Min(N_FINGERS, trackedFingers.Length);
-             fingerIndex++)
-        {
-            Transform trackedFinger = trackedFingers[fingerIndex];
-            if (trackedFinger == null)
-                continue;
-
-            builtFingerRootPositions[fingerIndex] =
-                trackedRoot.InverseTransformPoint(trackedFinger.position);
-
-            Transform trackedJoint = trackedFinger;
-            for (int jointIndex = 0;
-                 jointIndex < N_ACTIVE_BONES;
-                 jointIndex++)
-            {
-                builtBoneLengths[fingerIndex, jointIndex] =
-                    GetBoneVector(trackedJoint).magnitude;
-                trackedJoint = GetBoneChild(trackedJoint);
-                if (trackedJoint == null)
-                    break;
-            }
-        }
-
-        hasBuiltGeometry = true;
-    }
-
-    private void RebuildArticulationChain()
+    private void RebuildFingers()
     {
         if (fingers == null || trackedFingers == null)
             return;
 
-        ArticulationBody[] bodies =
-            GetComponentsInChildren<ArticulationBody>(true);
-        foreach (ArticulationBody body in bodies)
+        foreach (ArticulationBody body in articulationBodies)
             body.enabled = false;
 
-        for (int fingerIndex = 0;
-             fingerIndex < Mathf.Min(
-                 N_FINGERS,
-                 Mathf.Min(fingers.Length, trackedFingers.Length));
-             fingerIndex++)
+        int fingerCount = Mathf.Min(
+            N_FINGERS,
+            Mathf.Min(fingers.Length, trackedFingers.Length));
+        for (int fingerIndex = 0; fingerIndex < fingerCount; fingerIndex++)
         {
             GameObject currentJoint = fingers[fingerIndex];
             Transform trackedJoint = trackedFingers[fingerIndex];
@@ -320,15 +277,10 @@ public class HandSkeleton : MonoBehaviour
 
             if (trackedRoot != null)
             {
-                currentJoint.transform.position =
-                    gameObject.transform.TransformPoint(
-                        trackedRoot.InverseTransformPoint(
-                            trackedJoint.position));
+                currentJoint.transform.position = gameObject.transform.TransformPoint(trackedRoot.InverseTransformPoint(trackedJoint.position));
             }
 
-            for (int jointIndex = 0;
-                 jointIndex < N_ACTIVE_BONES;
-                 jointIndex++)
+            for (int jointIndex = 0; jointIndex < N_ACTIVE_BONES; jointIndex++)
             {
                 Transform physicsChild = GetBoneChild(currentJoint.transform);
                 Vector3 trackedBone = GetBoneVector(trackedJoint);
@@ -363,25 +315,135 @@ public class HandSkeleton : MonoBehaviour
             }
         }
 
-        articulationBodies.Clear();
-        ArticulationBody rootBody = GetComponent<ArticulationBody>();
-        if (rootBody != null)
-            articulationBodies.Add(rootBody);
-
-        Transform palmCollider = palm == null
-            ? null
-            : palm.transform.Find(palm.name + " Collider");
-        ArticulationBody palmBody = palmCollider == null
-            ? null
-            : palmCollider.GetComponent<ArticulationBody>();
-        if (palmBody != null)
-            articulationBodies.Add(palmBody);
-
-        ConstructFingers();
         foreach (ArticulationBody body in articulationBodies)
             body.enabled = true;
 
-        CaptureBuiltGeometry();
+        CaptureFingerState();
+    }
+
+    private void CaptureFingerState()
+    {
+        if (fingers == null || trackedFingers == null)
+            return;
+
+        int fingerCount = Mathf.Min(
+            N_FINGERS,
+            Mathf.Min(fingers.Length, trackedFingers.Length));
+        for (int fingerIndex = 0; fingerIndex < fingerCount; fingerIndex++)
+        {
+            Transform trackedJoint = trackedFingers[fingerIndex];
+            GameObject currentJoint = fingers[fingerIndex];
+            for (int jointIndex = 0;
+                 jointIndex < N_ACTIVE_BONES &&
+                 trackedJoint != null &&
+                 currentJoint != null;
+                 jointIndex++)
+            {
+                if (jointIndex == 0 && trackedRoot != null)
+                {
+                    builtFingerRootPositions[fingerIndex] =
+                        trackedRoot.InverseTransformPoint(
+                            trackedJoint.position);
+                }
+
+                builtBoneLengths[fingerIndex, jointIndex] =
+                    GetBoneVector(trackedJoint).magnitude;
+
+                ArticulationBody body =
+                    currentJoint.GetComponent<ArticulationBody>();
+                Transform physicsJoint = currentJoint.transform;
+                Transform parentJoint = physicsJoint.parent;
+                if (parentJoint != null && body != null)
+                {
+                    Vector3 incomingBone =
+                        physicsJoint.position - parentJoint.position;
+                    Vector3 outgoingBone = GetBoneVector(physicsJoint);
+
+                    float physicsFlexion = GetRelativeDriveAngle(
+                            physicsJoint,
+                            incomingBone,
+                            outgoingBone,
+                            0);
+                    float physicsSplay = GetRelativeDriveAngle(
+                            physicsJoint,
+                            incomingBone,
+                            outgoingBone,
+                            1);
+
+                    initialJointOffsets[fingerIndex, jointIndex, 0] =
+                        physicsFlexion - GetJointPositionDegrees(body, 0);
+                    initialJointOffsets[fingerIndex, jointIndex, 1] =
+                        physicsSplay - GetJointPositionDegrees(body, 1);
+
+                    ArticulationDrive xDrive = body.xDrive;
+                    float xOffset =
+                        initialJointOffsets[fingerIndex, jointIndex, 0];
+                    xDrive.lowerLimit =
+                        GetFlexionMinimum(fingerIndex, jointIndex) - xOffset;
+                    xDrive.upperLimit =
+                        GetFlexionMaximum(fingerIndex, jointIndex) - xOffset;
+                    body.xDrive = xDrive;
+
+                    if (body.jointPosition.dofCount > 1)
+                    {
+                        ArticulationDrive yDrive = body.yDrive;
+                        float yOffset =
+                            initialJointOffsets[fingerIndex, jointIndex, 1];
+                        yDrive.lowerLimit =
+                            GetSplayMinimum(fingerIndex) - yOffset;
+                        yDrive.upperLimit =
+                            GetSplayMaximum(fingerIndex) - yOffset;
+                        body.yDrive = yDrive;
+                    }
+                }
+
+                trackedJoint = GetBoneChild(trackedJoint);
+                Transform physicsChild = GetBoneChild(currentJoint.transform);
+                currentJoint = physicsChild == null
+                    ? null
+                    : physicsChild.gameObject;
+            }
+        }
+
+        hasBuiltGeometry = true;
+        hasInitialJointOffsets = true;
+    }
+
+    private float GetJointPositionDegrees(
+        ArticulationBody body,
+        int axisType)
+    {
+        return body.jointPosition.dofCount > axisType
+            ? body.jointPosition[axisType] * Mathf.Rad2Deg
+            : 0f;
+    }
+
+    private float GetFlexionMinimum(int fingerIndex, int jointIndex)
+    {
+        return IsThumb(fingerIndex)
+            ? thumbJointMinimums[jointIndex]
+            : fingerJointMinimums[jointIndex];
+    }
+
+    private float GetFlexionMaximum(int fingerIndex, int jointIndex)
+    {
+        return IsThumb(fingerIndex)
+            ? thumbJointMaximums[jointIndex]
+            : fingerJointMaximums[jointIndex];
+    }
+
+    private float GetSplayMinimum(int fingerIndex)
+    {
+        return IsThumb(fingerIndex)
+            ? thumbSplayMinimum
+            : fingerSplayMinimum;
+    }
+
+    private float GetSplayMaximum(int fingerIndex)
+    {
+        return IsThumb(fingerIndex)
+            ? thumbSplayMaximum
+            : fingerSplayMaximum;
     }
 
     private void ConstructPalm()
@@ -757,8 +819,8 @@ public class HandSkeleton : MonoBehaviour
                 trackedJoint,
                 trackedJoint.parent,
                 fingerIndex,
-                0,
-                jointIndex == 0);
+                jointIndex,
+                0);
 
             if (dof > 1)
             {
@@ -768,8 +830,8 @@ public class HandSkeleton : MonoBehaviour
                     trackedJoint,
                     trackedJoint.parent,
                     fingerIndex,
-                    1,
-                    jointIndex == 0);
+                    jointIndex,
+                    1);
 
                 /*if (logSplayJoint &&
                     fingerIndex == debugFingerIndex &&
@@ -798,8 +860,8 @@ public class HandSkeleton : MonoBehaviour
         Transform trackedJoint,
         Transform parentJoint,
         int fingerIndex,
-        int axisType,
-        bool isMetacarpal)
+        int jointIndex,
+        int axisType)
     {
         if (parentJoint == null)
             return drive;
@@ -810,56 +872,21 @@ public class HandSkeleton : MonoBehaviour
         Vector3 axis = axisType == 0
             ? Utils.GetArticulationRightAxis(body)
             : Utils.GetArticulationUpAxis(body);
-        float trackedAngle = GetTrackedDriveAngle(
+        float trackedAngle = GetRelativeDriveAngle(
             trackedJoint,
             incomingBone,
             outgoingBone,
             axisType);
 
-        float targetAngle = trackedAngle;
-        if (isMetacarpal)
-        {
-            if (!metacarpalReferencesInitialized[fingerIndex, axisType] &&
-                incomingBone.sqrMagnitude > Mathf.Epsilon &&
-                outgoingBone.sqrMagnitude > Mathf.Epsilon)
-            {
-                metacarpalReferenceAngles[fingerIndex, axisType] = trackedAngle;
-                metacarpalReferencesInitialized[fingerIndex, axisType] = true;
-            }
-
-            if (metacarpalReferencesInitialized[fingerIndex, axisType])
-            {
-                targetAngle = Mathf.DeltaAngle(
-                    metacarpalReferenceAngles[fingerIndex, axisType],
-                    trackedAngle);
-            }
-        }
-        else
-        {
-            Vector3 physicsOutgoing = GetBoneVector(body.transform);
-            float currentAngle = body.jointPosition.dofCount > axisType
-                ? body.jointPosition[axisType] * Mathf.Rad2Deg
-                : 0f;
-
-            if (physicsOutgoing.sqrMagnitude > Mathf.Epsilon &&
-                outgoingBone.sqrMagnitude > Mathf.Epsilon)
-            {
-                // The physics bone can have a fixed local orientation offset
-                // from the articulation anchor frame. Correct from the
-                // measured physical bone so the target describes the actual
-                // pose, not an assumed +Z rest direction.
-                float geometricCorrection = Vector3.SignedAngle(
-                    physicsOutgoing,
-                    outgoingBone,
-                    axis);
-                targetAngle = currentAngle + geometricCorrection;
-            }
-        }
+        float targetAngle = Mathf.DeltaAngle(
+            hasInitialJointOffsets
+                ? initialJointOffsets[fingerIndex, jointIndex, axisType]
+                : 0f,
+            trackedAngle);
 
         drive.target = targetAngle;
 
         if (logJointDriveDiagnostics &&
-            !isMetacarpal &&
             fingerIndex == diagnosticFingerIndex &&
             axisType == 0 &&
             diagnosticJointIndex >= 1 &&
@@ -881,7 +908,6 @@ public class HandSkeleton : MonoBehaviour
         }
 
         if (logArticulationStateDiagnostics &&
-            !isMetacarpal &&
             fingerIndex == diagnosticFingerIndex &&
             axisType == 0 &&
             diagnosticJointIndex >= 1 &&
@@ -979,8 +1005,8 @@ public class HandSkeleton : MonoBehaviour
         return drive;
     }
 
-    private float GetTrackedDriveAngle(
-        Transform trackedJoint,
+    private float GetRelativeDriveAngle(
+        Transform joint,
         Vector3 incomingBone,
         Vector3 outgoingBone,
         int axisType)
@@ -990,7 +1016,7 @@ public class HandSkeleton : MonoBehaviour
             return 0f;
 
         Quaternion frame = GetJointFrame(
-            trackedJoint,
+            joint,
             incomingBone,
             Quaternion.identity);
         Vector3 localOutgoing =
