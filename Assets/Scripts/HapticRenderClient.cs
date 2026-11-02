@@ -17,9 +17,6 @@ public class HapticRenderClient : MonoBehaviour
     // Whether force feedback is sent to server
     public bool forceFeedback = true;
 
-    // Whether inertia is enabled for all nodes registered with this client
-    [SerializeField] private bool useInertiaValue;
-
     public bool useInertia = false;
 
     // Whether visualization is enabled

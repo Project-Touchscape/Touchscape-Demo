@@ -174,6 +174,75 @@ public static class Utils
             inertia.m20 * vector.x + inertia.m21 * vector.y + inertia.m22 * vector.z);
     }
 
+    public static Vector3 MultiplyInverseInertia(Matrix4x4 inertia, Vector3 vector)
+    {
+        float determinant =
+            inertia.m00 * (inertia.m11 * inertia.m22 - inertia.m12 * inertia.m21)
+            - inertia.m01 * (inertia.m10 * inertia.m22 - inertia.m12 * inertia.m20)
+            + inertia.m02 * (inertia.m10 * inertia.m21 - inertia.m11 * inertia.m20);
+
+        if (Mathf.Abs(determinant) <= Mathf.Epsilon)
+        {
+            return Vector3.zero;
+        }
+
+        float inverseDeterminant = 1f / determinant;
+        return new Vector3(
+            (inertia.m22 * inertia.m11 - inertia.m12 * inertia.m21) * vector.x
+                + (inertia.m02 * inertia.m21 - inertia.m01 * inertia.m22) * vector.y
+                + (inertia.m01 * inertia.m12 - inertia.m02 * inertia.m11) * vector.z,
+            (inertia.m12 * inertia.m20 - inertia.m10 * inertia.m22) * vector.x
+                + (inertia.m00 * inertia.m22 - inertia.m02 * inertia.m20) * vector.y
+                + (inertia.m02 * inertia.m10 - inertia.m00 * inertia.m12) * vector.z,
+            (inertia.m10 * inertia.m21 - inertia.m11 * inertia.m20) * vector.x
+                + (inertia.m01 * inertia.m20 - inertia.m00 * inertia.m21) * vector.y
+                + (inertia.m00 * inertia.m11 - inertia.m01 * inertia.m10) * vector.z)
+            * inverseDeterminant;
+    }
+
+    public static void GetArticulationBodyWrench(
+        ArticulationBody root,
+        Vector3 rootCOM,
+        ArticulationBody child,
+        Vector3 acceleration,
+        Vector3 angularAcceleration,
+        out Vector3 force,
+        out Vector3 torque)
+    {
+        if (root == null || child == null)
+        {
+            force = Vector3.zero;
+            torque = Vector3.zero;
+            return;
+        }
+
+        Vector3 angularVelocity = root.angularVelocity;
+        Vector3 rootToChildCOM =
+            child.worldCenterOfMass - rootCOM;
+        Vector3 relativeVelocity =
+            child.linearVelocity
+            - root.linearVelocity
+            - Vector3.Cross(angularVelocity, rootToChildCOM);
+        Vector3 coriolisAcceleration =
+            2f * Vector3.Cross(angularVelocity, relativeVelocity);
+        Vector3 childAcceleration =
+            acceleration
+            + Vector3.Cross(angularAcceleration, rootToChildCOM)
+            + Vector3.Cross(
+                angularVelocity,
+                Vector3.Cross(angularVelocity, rootToChildCOM))
+            + coriolisAcceleration;
+
+        Matrix4x4 childInertia = WorldInertiaMatrix(child);
+        Vector3 childAngularMomentum =
+            MultiplyInertia(childInertia, angularVelocity);
+
+        force = child.mass * childAcceleration;
+        torque =
+            MultiplyInertia(childInertia, angularAcceleration)
+            + Vector3.Cross(angularVelocity, childAngularMomentum);
+    }
+
     public static float IntertiaAboutAxis(Matrix4x4 inertia, Vector3 axis)
     {
         // Calculate the moment of inertia about a given axis

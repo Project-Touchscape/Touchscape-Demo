@@ -130,14 +130,23 @@ public class IntegratedHapticNode : HapticNode
         {
             newPhysicsForce = newPhysicsForce.normalized * maxPhysicsForce;
         }
-        physicsAb.AddForce(newPhysicsForce);
 
         // Trims by max torque
         if (newPhysicsTorque.magnitude > maxPhysicsTorque)
         {
             newPhysicsTorque = newPhysicsTorque.normalized * maxPhysicsTorque;
         }
-        physicsAb.AddTorque(newPhysicsTorque);
+
+        // Applies the force and torque to the physics object
+        if (useChainedMass)
+        {
+            DistributeWrenchToArticulation(newPhysicsForce, newPhysicsTorque);
+        }
+        else
+        {
+            physicsAb.AddForce(newPhysicsForce);
+            physicsAb.AddTorque(newPhysicsTorque);
+        }
 
         // Updates haptic node state
         Vector3 inertiaForce = -physicsMass * physicsAccel;
@@ -231,6 +240,56 @@ public class IntegratedHapticNode : HapticNode
         return torque;
     }
 
+    private void DistributeWrenchToArticulation(Vector3 force, Vector3 torque)
+    {
+        if (physicsMass <= Mathf.Epsilon)
+        {
+            return;
+        }
+
+        // Solve Euler's equation for the aggregate angular acceleration.
+        // The gyroscopic term is required when the equivalent rigid body is
+        // already rotating.
+        Vector3 angularVelocity = physicsAb.angularVelocity;
+        Vector3 angularMomentum =
+            Utils.MultiplyInertia(physicsInertia, angularVelocity);
+        Vector3 angularAcceleration = Utils.MultiplyInverseInertia(
+            physicsInertia,
+            torque - Vector3.Cross(angularVelocity, angularMomentum));
+        Vector3 accel = force / physicsMass;
+
+        // Gets all articulation bodies in the hierarchy
+        ArticulationBody[] articulationBodies = gameObject.GetComponentsInChildren<ArticulationBody>();
+
+        // Apply the acceleration field of an equivalent rigid body to every
+        // body at its center of mass. The force contribution accounts for
+        // orbital inertia; the torque contribution accounts for each body's
+        // intrinsic inertia.
+        foreach (ArticulationBody ab in articulationBodies)
+        {
+            Utils.GetArticulationBodyWrench(
+                physicsAb,
+                physicsCOM,
+                ab,
+                accel,
+                angularAcceleration,
+                out Vector3 childForce,
+                out Vector3 childTorque);
+            ab.AddForce(childForce);
+            ab.AddTorque(childTorque);
+        }
+    }
+
+    public ArticulationBody GetPhysicsAb()
+    {
+        return physicsAb;
+    }
+
+    public Vector3 GetPhysicsCOM()
+    {
+        return physicsCOM;
+    }
+
     public Vector3 GetPhysicsAccel()
     {
         return physicsAccel;
@@ -239,11 +298,6 @@ public class IntegratedHapticNode : HapticNode
     public Vector3 GetPhysicsAngAccel()
     {
         return physicsAngAccel;
-    }
-
-    public Vector3 GetPhysicsCOM()
-    {
-        return physicsCOM;
     }
 
     private void LogDiagnostics(
