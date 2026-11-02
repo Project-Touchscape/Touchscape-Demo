@@ -12,7 +12,7 @@ public class HandSkeleton : MonoBehaviour
     }
 
     private const int N_FINGERS = 5;
-    private const int N_ACTIVE_BONES = 3;
+    private const int N_ACTIVE_BONES = 4;
     private const string FingerColliderName = "Finger Collider";
 
     public Handedness handedness = Handedness.Right;
@@ -21,14 +21,14 @@ public class HandSkeleton : MonoBehaviour
     public Transform trackedRoot;
     public GameObject[] fingers = new GameObject[N_FINGERS];
     public Transform[] trackedFingers = new Transform[N_FINGERS];
-    public float[] fingerBoneWidths = new float[3] {0.020f, 0.018f, 0.016f};
-    public float[] thumbBoneWidths = new float[3] {0.025f, 0.023f, 0.021f};
+    public float[] fingerBoneWidths = new float[N_ACTIVE_BONES] {0.020f, 0.020f, 0.018f, 0.016f};
+    public float[] thumbBoneWidths = new float[N_ACTIVE_BONES-1] {0.025f, 0.023f, 0.021f};
 
-    public float[] fingerJointMinimums = new float[3] {-10f, -10f, -10f};
-    public float[] fingerJointMaximums = new float[3] {89f, 89f, 89f};
+    public float[] fingerJointMinimums = new float[N_ACTIVE_BONES] {-10f, -10f, -10f, -10f};
+    public float[] fingerJointMaximums = new float[N_ACTIVE_BONES] {10f, 89f, 89f, 89f};
 
-    public float[] thumbJointMinimums = new float[3] {-45f, -45f, -45f};
-    public float[] thumbJointMaximums = new float[3] {45f, 45f, 45f};
+    public float[] thumbJointMinimums = new float[N_ACTIVE_BONES-1] {-45f, -45f, -45f};
+    public float[] thumbJointMaximums = new float[N_ACTIVE_BONES-1] {45f, 45f, 45f};
 
     public float fingerSplayMinimum = -10f;
     public float fingerSplayMaximum = 10f;
@@ -98,7 +98,7 @@ public class HandSkeleton : MonoBehaviour
     private List<ArticulationBody> articulationBodies = new List<ArticulationBody>();
 
     // First joint has splay, second and third do not have splay
-    private int[] perJointDOF = new int[3] {2, 1, 1};
+    private int[] perJointDOF = new int[N_ACTIVE_BONES] {1, 2, 1, 1};
 
     private HapticNode[] fingertipNodes = new HapticNode[N_FINGERS];
     private Vector3[] prevFingertipLinearMomenta = new Vector3[N_FINGERS];
@@ -183,7 +183,7 @@ public class HandSkeleton : MonoBehaviour
                 continue;
 
             for (int jointIndex = 0;
-                 jointIndex < N_ACTIVE_BONES;
+                 jointIndex < GetBonesPerFinger(fingerIndex);
                  jointIndex++)
             {
                 // Update the articulation body's target angle based on the tracked joint's rotation
@@ -213,6 +213,16 @@ public class HandSkeleton : MonoBehaviour
         return fingerIndex == N_FINGERS - 1;
     }
 
+    private int GetBonesPerFinger(int fingerIndex)
+    {
+        return IsThumb(fingerIndex) ? N_ACTIVE_BONES-1 : N_ACTIVE_BONES;
+    }
+
+    private int GetJointDOF(int fingerIndex, int jointIndex)
+    {
+        return IsThumb(fingerIndex) ? perJointDOF[jointIndex + 1] : perJointDOF[jointIndex];
+    }
+
     private bool HasFingerGeometryChanged()
     {
         if (trackedRoot == null || fingers == null || trackedFingers == null)
@@ -221,10 +231,7 @@ public class HandSkeleton : MonoBehaviour
         if (!hasBuiltGeometry)
             return true;
 
-        int fingerCount = Mathf.Min(
-            N_FINGERS,
-            Mathf.Min(fingers.Length, trackedFingers.Length));
-        for (int fingerIndex = 0; fingerIndex < fingerCount; fingerIndex++)
+        for (int fingerIndex = 0; fingerIndex < N_FINGERS; fingerIndex++)
         {
             Transform trackedFinger = trackedFingers[fingerIndex];
             if (trackedFinger == null)
@@ -237,7 +244,7 @@ public class HandSkeleton : MonoBehaviour
             }
 
             Transform trackedJoint = trackedFinger;
-            for (int jointIndex = 0; jointIndex < N_ACTIVE_BONES; jointIndex++)
+            for (int jointIndex = 0; jointIndex < GetBonesPerFinger(fingerIndex); jointIndex++)
             {
                 if (trackedJoint == null)
                     break;
@@ -280,7 +287,7 @@ public class HandSkeleton : MonoBehaviour
                 currentJoint.transform.position = gameObject.transform.TransformPoint(trackedRoot.InverseTransformPoint(trackedJoint.position));
             }
 
-            for (int jointIndex = 0; jointIndex < N_ACTIVE_BONES; jointIndex++)
+            for (int jointIndex = 0; jointIndex < GetBonesPerFinger(fingerIndex); jointIndex++)
             {
                 Transform physicsChild = GetBoneChild(currentJoint.transform);
                 Vector3 trackedBone = GetBoneVector(trackedJoint);
@@ -334,7 +341,7 @@ public class HandSkeleton : MonoBehaviour
             Transform trackedJoint = trackedFingers[fingerIndex];
             GameObject currentJoint = fingers[fingerIndex];
             for (int jointIndex = 0;
-                 jointIndex < N_ACTIVE_BONES &&
+                 jointIndex < GetBonesPerFinger(fingerIndex) &&
                  trackedJoint != null &&
                  currentJoint != null;
                  jointIndex++)
@@ -546,12 +553,12 @@ public class HandSkeleton : MonoBehaviour
         if (fingers == null)
             return;
 
-        for (int fingerIndex = 0; fingerIndex < Mathf.Min(N_FINGERS, fingers.Length); fingerIndex++)
+        for (int fingerIndex = 0; fingerIndex < N_FINGERS; fingerIndex++)
         {
             GameObject currentJoint = fingers[fingerIndex];
 
             for (int jointIndex = 0;
-                 jointIndex < N_ACTIVE_BONES;
+                 jointIndex < GetBonesPerFinger(fingerIndex);
                  jointIndex++)
             {
                 if (currentJoint == null)
@@ -573,7 +580,7 @@ public class HandSkeleton : MonoBehaviour
     private void ConstructFingerJoint(int fingerIndex, int jointIndex, GameObject currentJoint)
     {
         bool isThumb = IsThumb(fingerIndex);
-        int dof = perJointDOF[jointIndex];
+        int dof = GetJointDOF(fingerIndex, jointIndex);
 
         Transform jointTransform = currentJoint.transform;
 
@@ -697,7 +704,7 @@ public class HandSkeleton : MonoBehaviour
         // Gets tracked joint
         Transform trackedJoint = trackedFingers[fingerIndex];
 
-        for (int i = 0; i < N_ACTIVE_BONES; i++)
+        for (int i = 0; i < GetBonesPerFinger(fingerIndex); i++)
         {
             trackedJoint = GetBoneChild(trackedJoint);
             if (trackedJoint == null)
@@ -769,7 +776,7 @@ public class HandSkeleton : MonoBehaviour
         float boneWidth = IsThumb(fingerIndex) ? thumbBoneWidths[jointIndex] : fingerBoneWidths[jointIndex];
 
         // Shortens the bone length for the last joint to be tangent to the fingertip
-        if (jointIndex == N_ACTIVE_BONES - 1)
+        if (jointIndex == GetBonesPerFinger(fingerIndex) - 1)
             boneLength -= boneWidth * 0.5f;
 
         collider.direction = 2;
@@ -798,7 +805,7 @@ public class HandSkeleton : MonoBehaviour
         if (currentJoint == null || trackedJoint == null)
             return;
 
-        float dof = perJointDOF[jointIndex];
+        float dof = GetJointDOF(fingerIndex, jointIndex);
         ArticulationBody body = currentJoint.GetComponent<ArticulationBody>();
 
         if (body == null)
