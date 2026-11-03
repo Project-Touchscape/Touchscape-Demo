@@ -46,6 +46,13 @@ public class IntegratedHapticNode : HapticNode
     private int fixedStep;
     private Vector3 previousRelativePosition = Vector3.zero;
     private bool hasPreviousRelativePosition;
+    private readonly List<float> jointCoriolisCentrifugalForces =
+        new List<float>();
+    private readonly List<float> jointExternalForces =
+        new List<float>();
+    private readonly List<float> jointForces =
+        new List<float>();
+
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     new protected void Start()
     {
@@ -248,6 +255,35 @@ public class IntegratedHapticNode : HapticNode
 
         physicsAb.AddForce(force);
         physicsAb.AddTorque(torque);
+
+        jointCoriolisCentrifugalForces.Clear();
+        jointExternalForces.Clear();
+        int coriolisDofCount =
+            physicsAb.GetJointCoriolisCentrifugalForces(
+                jointCoriolisCentrifugalForces);
+        int externalDofCount =
+            physicsAb.GetJointExternalForces(
+                jointExternalForces,
+                Time.fixedDeltaTime);
+
+        if (coriolisDofCount != externalDofCount)
+        {
+            Debug.LogError(
+                $"[{name}] Articulation force DOF counts differ: " +
+                $"Coriolis={coriolisDofCount}, " +
+                $"External={externalDofCount}.");
+            return;
+        }
+
+        jointForces.Clear();
+        for (int i = 0; i < coriolisDofCount; i++)
+        {
+            jointForces.Add(
+                + jointCoriolisCentrifugalForces[i]
+                + jointExternalForces[i]);
+        }
+
+        physicsAb.SetJointForces(jointForces);
     }
 
     public ArticulationBody GetPhysicsAb()

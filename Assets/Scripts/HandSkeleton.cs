@@ -63,14 +63,8 @@ public class HandSkeleton : MonoBehaviour
     public float fingerStiffness = 1f;
 
     public float fingerDamping = 1f;
-    [Min(0f)]
-    public float fingerPositionGain = 25f;
-    [Min(0f)]
-    public float fingerVelocityGain = 10f;
 
     public float fingerMaxTorque = 40f;
-    [Min(0.1f)]
-    public float fingerMaxAcceleration = 100f;
 
     [Header("Articulation Chain Rebuild")]
     [Min(0.0001f)] public float rootPositionRebuildThreshold = 0.002f;
@@ -121,9 +115,6 @@ public class HandSkeleton : MonoBehaviour
         new float[N_FINGERS, N_ACTIVE_BONES, 2];
     private bool hasBuiltGeometry;
     private bool hasInitialJointOffsets;
-    private List<int> jointDofStartIndices = new List<int>();
-    private List<float> commandedJointForces = new List<float>();
-    private ArticulationBody forceCommandRoot;
 
     void Start()
     {
@@ -177,19 +168,6 @@ public class HandSkeleton : MonoBehaviour
         if (fingers == null || trackedFingers == null)
             return;
 
-        forceCommandRoot = rootNode == null
-            ? null
-            : rootNode.GetPhysicsAb();
-        if (forceCommandRoot == null)
-            return;
-
-        jointDofStartIndices.Clear();
-        int totalDofCount =
-            forceCommandRoot.GetDofStartIndices(jointDofStartIndices);
-        commandedJointForces.Clear();
-        for (int dofIndex = 0; dofIndex < totalDofCount; dofIndex++)
-            commandedJointForces.Add(0f);
-
         for (int fingerIndex = 0;
              fingerIndex < Mathf.Min(
                  N_FINGERS,
@@ -228,9 +206,6 @@ public class HandSkeleton : MonoBehaviour
             // Updates fingertip haptic node
             UpdateFingertipNode(fingerIndex);
         }
-
-        if (forceCommandRoot != null)
-            forceCommandRoot.SetJointForces(commandedJointForces);
     }
 
     private bool IsThumb(int fingerIndex)
@@ -704,7 +679,7 @@ public class HandSkeleton : MonoBehaviour
                     target = 0f,
                     stiffness = 0f,
                     damping = 0f,
-                    forceLimit = 0f,
+                    forceLimit = 500f,
                     lowerLimit = splayLowerLimit,
                     upperLimit = splayUpperLimit
                 };
@@ -916,37 +891,6 @@ public class HandSkeleton : MonoBehaviour
                 : 0f,
             trackedAngle);
 
-        // Compute the reduced-space position controller acceleration.
-        float stiffness = fingerStiffness * fingerPositionGain;
-        float damping = fingerDamping * fingerVelocityGain;
-
-        float currentPhysicsAngle = body.jointPosition[axisNum] * Mathf.Rad2Deg;
-        float angularError = (currentPhysicsAngle - targetAngle) * Mathf.Deg2Rad;
-
-        float driveAccel = -(stiffness * angularError + damping * body.jointVelocity[axisNum]);
-        driveAccel = Mathf.Clamp(
-            driveAccel,
-            -fingerMaxAcceleration,
-            fingerMaxAcceleration);
-
-        // Finds the reduced-space force needed to produce the desired
-        // acceleration on this joint axis.
-        int jointDofCount = body.jointPosition.dofCount;
-        if (axisNum >= jointDofCount)
-            return drive;
-
-        ArticulationReducedSpace reducedAcceleration =
-            CreateReducedSpace(jointDofCount, axisNum, driveAccel);
-        ArticulationReducedSpace reducedForce =
-            body.GetJointForcesForAcceleration(reducedAcceleration);
-        float inverseDynamicsTorque = reducedForce[axisNum];
-        float driveTorque = inverseDynamicsTorque;
-        if (float.IsNaN(driveTorque) || float.IsInfinity(driveTorque))
-            driveTorque = 0f;
-
-        // Clamp the drive torque to the torque limit
-        driveTorque = Mathf.Clamp(driveTorque, -fingerMaxTorque, fingerMaxTorque);
-
         if (logJointDriveDiagnostics &&
             fingerIndex == diagnosticFingerIndex &&
             axisNum == 0 &&
@@ -965,26 +909,37 @@ public class HandSkeleton : MonoBehaviour
                 trackedAngle,
                 targetAngle,
                 fingerIndex,
-                jointIndex,
-                angularError,
-                driveAccel,
-                driveTorque,
-                inverseDynamicsTorque
-                );
+                diagnosticJointIndex);
         }
 
-        int dofStartIndex = body.index < jointDofStartIndices.Count
-            ? jointDofStartIndices[body.index]
-            : -1;
-        int commandIndex = dofStartIndex + axisNum;
-        if (dofStartIndex < 0 ||
-            commandIndex < 0 ||
-            commandIndex >= commandedJointForces.Count)
-        {
+        // Update stiffness and damping in case they have changed
+        float stiffness = fingerStiffness * Utils.GetMaxStiffness();
+        float damping = fingerDamping * Utils.GetMaxDamping();
+
+        float currentPhysicsAngle = body.jointPosition[axisNum] * Mathf.Rad2Deg;
+        float angularError = (currentPhysicsAngle - targetAngle) * Mathf.Deg2Rad;
+
+        float driveAccel = -(stiffness * angularError + damping * body.jointVelocity[axisNum]);
+
+        // Finds the reduced-space force needed to produce the desired
+        // acceleration on this joint axis.
+        int jointDofCount = body.jointPosition.dofCount;
+        if (axisNum >= jointDofCount)
             return drive;
-        }
 
-        commandedJointForces[commandIndex] = driveTorque;
+        ArticulationReducedSpace reducedAcceleration =
+            CreateReducedSpace(jointDofCount, axisNum, driveAccel);
+        ArticulationReducedSpace reducedForce =
+            body.GetJointForcesForAcceleration(reducedAcceleration);
+        float driveTorque = reducedForce[axisNum];
+
+        // Clamp the drive torque to the torque limit
+        driveTorque = Mathf.Clamp(driveTorque, -fingerMaxTorque, fingerMaxTorque);
+
+        // Add the force to the existing reduced-space joint force without
+        // replacing forces applied to the other axes.
+        float existingJointTorque = body.jointForce[axisNum];
+        //body.jointForce = CreateReducedSpace(jointDofCount, axisNum, existingJointTorque + driveTorque);
 
         HapticNode fingertipNode = fingertipNodes[fingerIndex];
         if (fingertipNode == null)
@@ -1014,8 +969,7 @@ public class HandSkeleton : MonoBehaviour
         fingertipExpectedForces[fingerIndex] += jacobianColumn * expectedTorque;
 
         // Finds the contribution of the effective joint torque to the fingertip inertial force
-        fingertipInertialForces[fingerIndex] +=
-            jacobianColumn * driveTorque;
+        fingertipInertialForces[fingerIndex] += jacobianColumn * existingJointTorque;
 
         /*Debug.Log(
             $"fingerIndex: {fingerIndex}\n" +
@@ -1125,11 +1079,7 @@ public class HandSkeleton : MonoBehaviour
         float trackedAngle,
         float targetAngle,
         int fingerIndex,
-        int jointIndex,
-        float angularError,
-        float driveAccel,
-        float driveTorque,
-        float inverseDynamicsTorque)
+        int jointIndex)
     {
         float actualAngle = body.jointPosition.dofCount > 0
             ? body.jointPosition[0] * Mathf.Rad2Deg
@@ -1159,12 +1109,8 @@ public class HandSkeleton : MonoBehaviour
             $"(0 is perpendicular)\n" +
             $"physicsIncoming={physicsIncoming.normalized}, " +
             $"physicsOutgoing={physicsOutgoing.normalized}\n" +
+            $"anchorRotation={body.anchorRotation.eulerAngles}, " +
             $"limits=[{body.xDrive.lowerLimit:F2},{body.xDrive.upperLimit:F2}], " +
-            $"jointPositionDof={body.jointPosition.dofCount}" +
-            $"angularError={angularError:F3} rad, " +
-            $"driveAccel={driveAccel:F3} rad/s^2, " +
-            $"inverseDynamicsTorque={inverseDynamicsTorque:F3} Nm, " +
-            $"driveTorque={driveTorque:F3} Nm, " +
-            $"maxTorque={fingerMaxTorque:F3} Nm");
+            $"jointPositionDof={body.jointPosition.dofCount}");
     }
 }
