@@ -115,6 +115,8 @@ public class HandSkeleton : MonoBehaviour
         new float[N_FINGERS, N_ACTIVE_BONES, 2];
     private bool hasBuiltGeometry;
     private bool hasInitialJointOffsets;
+    private bool[,,,] angleLimitWarnings =
+        new bool[N_FINGERS, N_ACTIVE_BONES, 2, 2];
 
     void Start()
     {
@@ -891,6 +893,14 @@ public class HandSkeleton : MonoBehaviour
                 : 0f,
             trackedAngle);
 
+        WarnIfAngleLimitReached(
+            body,
+            targetAngle,
+            trackedAngle,
+            fingerIndex,
+            jointIndex,
+            axisNum);
+
         drive.target = targetAngle;
 
         if (logJointDriveDiagnostics &&
@@ -1000,6 +1010,57 @@ public class HandSkeleton : MonoBehaviour
             );*/
 
         return drive;
+    }
+
+    private void WarnIfAngleLimitReached(
+        ArticulationBody body,
+        float targetAngle,
+        float relativeAngle,
+        int fingerIndex,
+        int jointIndex,
+        int axisNum)
+    {
+        ArticulationDrive limitDrive = axisNum == 0
+            ? body.xDrive
+            : body.yDrive;
+        float relativeOffset =
+            hasInitialJointOffsets
+                ? initialJointOffsets[fingerIndex, jointIndex, axisNum]
+                : 0f;
+        float relativeLowerLimit = limitDrive.lowerLimit + relativeOffset;
+        float relativeUpperLimit = limitDrive.upperLimit + relativeOffset;
+        bool atLowerLimit = targetAngle <= limitDrive.lowerLimit;
+        bool atUpperLimit = targetAngle >= limitDrive.upperLimit;
+
+        if (!atLowerLimit)
+            angleLimitWarnings[fingerIndex, jointIndex, axisNum, 0] = false;
+
+        if (!atUpperLimit)
+            angleLimitWarnings[fingerIndex, jointIndex, axisNum, 1] = false;
+
+        string axisName = axisNum == 0 ? "X" : "Y";
+
+        if (atLowerLimit &&
+            !angleLimitWarnings[fingerIndex, jointIndex, axisNum, 0])
+        {
+            angleLimitWarnings[fingerIndex, jointIndex, axisNum, 0] = true;
+            Debug.LogWarning(
+                $"Finger {fingerIndex}, joint {jointIndex}, axis {axisName} " +
+                $"target angle {relativeAngle:F2} deg reached the lower limit " +
+                $"{relativeLowerLimit:F2} deg in the relative frame.",
+                body);
+        }
+
+        if (atUpperLimit &&
+            !angleLimitWarnings[fingerIndex, jointIndex, axisNum, 1])
+        {
+            angleLimitWarnings[fingerIndex, jointIndex, axisNum, 1] = true;
+            Debug.LogWarning(
+                $"Finger {fingerIndex}, joint {jointIndex}, axis {axisName} " +
+                $"target angle {relativeAngle:F2} deg reached the upper limit " +
+                $"{relativeUpperLimit:F2} deg in the relative frame.",
+                body);
+        }
     }
 
     private float GetRelativeDriveAngle(
