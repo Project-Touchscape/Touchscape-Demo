@@ -701,7 +701,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 31321ba15b8f8eb4c954353edc038b1d, type: 2}
+  - {fileID: 2100000, guid: 4a0f1fc2dd20f2540bd48bbe8fa8f57d, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -740,7 +740,7 @@ Transform:
   m_GameObject: {fileID: 603740403}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0.5, z: 1}
+  m_LocalPosition: {x: 0, y: 0.5, z: 0.75}
   m_LocalScale: {x: 2, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1021,46 +1021,47 @@ MonoBehaviour:
   - 0.021
   fingerJointMinimums:
   - -20
-  - -10
+  - -20
   - -10
   - -10
   fingerJointMaximums:
   - 10
-  - 89
-  - 89
-  - 89
+  - 110
+  - 110
+  - 110
   thumbJointMinimums:
-  - -45
-  - -45
-  - -45
+  - -60
+  - -60
+  - -60
   thumbJointMaximums:
-  - 45
-  - 45
-  - 45
-  fingerSplayMinimum: -10
-  fingerSplayMaximum: 10
+  - 60
+  - 60
+  - 60
+  fingerSplayMinimum: -30
+  fingerSplayMaximum: 30
   thumbSplayMinimum: -45
-  thumbSplayMaximum: 45
-  perBoneMass: 0.1
-  palmMass: 0.3
+  thumbSplayMaximum: 55
+  perBoneMass: 1
+  palmMass: 3
   material: {fileID: 13400000, guid: 79f32ab1ddb2e964fbf9bbc1fa6ada07, type: 2}
   useGravity: 0
   palmPosStiffness: 0.9
   palmPosDamping: 1
   palmRotStiffness: 0.9
   palmRotDamping: 1
-  palmMaxForce: 200
+  palmMaxForce: 1000
   palmMaxTorque: 500
   fingerStiffness: 1
   fingerDamping: 1
   fingerMaxTorque: 500
   rootPositionRebuildThreshold: 0.002
-  boneLengthRebuildThreshold: 0.001
+  boneLengthRebuildThreshold: 0.002
   logJointDriveDiagnostics: 0
   jointDriveDiagnosticInterval: 0.5
-  diagnosticFingerIndex: 0
-  diagnosticJointIndex: 1
+  diagnosticFingerIndex: 1
+  diagnosticJointIndex: 2
   logArticulationStateDiagnostics: 0
+  articulationStateDiagnosticInterval: 0.5
 --- !u!1 &1169935341
 GameObject:
   m_ObjectHideFlags: 0
@@ -1171,7 +1172,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8372620129679473635, guid: 0886c7611c132684ea26007d1113e53c, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 0.951
+      value: 0.701
       objectReference: {fileID: 0}
     - target: {fileID: 8372620129679473635, guid: 0886c7611c132684ea26007d1113e53c, type: 3}
       propertyPath: m_LocalRotation.w
@@ -1244,7 +1245,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8372620129679473635, guid: 0886c7611c132684ea26007d1113e53c, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 0.75
+      value: 0.5
       objectReference: {fileID: 0}
     - target: {fileID: 8372620129679473635, guid: 0886c7611c132684ea26007d1113e53c, type: 3}
       propertyPath: m_LocalRotation.w
@@ -1302,11 +1303,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8372620129679473635, guid: 0886c7611c132684ea26007d1113e53c, type: 3}
       propertyPath: m_LocalScale.y
-      value: 0.05
+      value: 0.023420613
       objectReference: {fileID: 0}
     - target: {fileID: 8372620129679473635, guid: 0886c7611c132684ea26007d1113e53c, type: 3}
       propertyPath: m_LocalScale.z
-      value: 0.05
+      value: 0.02393128
       objectReference: {fileID: 0}
     - target: {fileID: 8372620129679473635, guid: 0886c7611c132684ea26007d1113e53c, type: 3}
       propertyPath: m_LocalPosition.x
@@ -1318,7 +1319,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8372620129679473635, guid: 0886c7611c132684ea26007d1113e53c, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 0.931
+      value: 0.681
       objectReference: {fileID: 0}
     - target: {fileID: 8372620129679473635, guid: 0886c7611c132684ea26007d1113e53c, type: 3}
       propertyPath: m_LocalRotation.w
@@ -1694,8 +1695,8 @@ MonoBehaviour:
   useInertia: 0
   visualization: 1
   forceVisualPrefab: {fileID: 910768547617064684, guid: 2a12e6e218c663347ad7214e1fb1b21d, type: 3}
-  forceVisualScale: 0.05
-  minOutputForce: 2
+  forceVisualScale: 0.005
+  minOutputForce: 20
 --- !u!114 &1751522105
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2112,46 +2113,47 @@ MonoBehaviour:
   - 0.021
   fingerJointMinimums:
   - -20
-  - -10
+  - -20
   - -10
   - -10
   fingerJointMaximums:
   - 10
-  - 89
-  - 89
-  - 89
+  - 110
+  - 110
+  - 110
   thumbJointMinimums:
-  - -45
-  - -45
-  - -45
+  - -60
+  - -60
+  - -60
   thumbJointMaximums:
-  - 45
-  - 45
-  - 45
-  fingerSplayMinimum: -20
-  fingerSplayMaximum: 20
+  - 60
+  - 60
+  - 60
+  fingerSplayMinimum: -30
+  fingerSplayMaximum: 30
   thumbSplayMinimum: -45
-  thumbSplayMaximum: 45
-  perBoneMass: 0.1
-  palmMass: 0.3
+  thumbSplayMaximum: 55
+  perBoneMass: 1
+  palmMass: 3
   material: {fileID: 13400000, guid: 79f32ab1ddb2e964fbf9bbc1fa6ada07, type: 2}
   useGravity: 0
   palmPosStiffness: 0.9
   palmPosDamping: 1
   palmRotStiffness: 0.9
   palmRotDamping: 1
-  palmMaxForce: 200
+  palmMaxForce: 1000
   palmMaxTorque: 500
   fingerStiffness: 1
   fingerDamping: 1
   fingerMaxTorque: 500
   rootPositionRebuildThreshold: 0.002
-  boneLengthRebuildThreshold: 0.001
+  boneLengthRebuildThreshold: 0.002
   logJointDriveDiagnostics: 0
   jointDriveDiagnosticInterval: 0.5
   diagnosticFingerIndex: 0
   diagnosticJointIndex: 1
   logArticulationStateDiagnostics: 0
+  articulationStateDiagnosticInterval: 0.5
 --- !u!1001 &7097662409868287624
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -2170,7 +2172,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2960652154540040454, guid: 45b724cdb4580d348b5b9a10d49bd232, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 1.131
+      value: 0.88100004
       objectReference: {fileID: 0}
     - target: {fileID: 2960652154540040454, guid: 45b724cdb4580d348b5b9a10d49bd232, type: 3}
       propertyPath: m_LocalRotation.w
