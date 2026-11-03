@@ -938,7 +938,7 @@ public class HandSkeleton : MonoBehaviour
         Utils.GetChainedMassProperties(body, out float totalMass, out Vector3 com, out Matrix4x4 totalInertia);
 
         // Applies coefficients to get necessary angular acceleration
-        Vector3 jointPoint = body.transform.TransformPoint(body.anchorPosition);
+        Vector3 jointPoint = body.transform.position;
 
         float axisInertia = Utils.InertiaAboutAxisAtPoint(
             totalInertia,
@@ -964,7 +964,7 @@ public class HandSkeleton : MonoBehaviour
             return drive;
 
         Vector3 jointToFingertip =
-            fingertipNode.trackedTransform.position - jointPoint;
+            fingertipNode.trackedTransform.position - trackedJoint.position;
 
         // Gets relationship between joint torque and fingertip force
         Vector3 jacobianColumn = Vector3.Cross(axis, jointToFingertip);
