@@ -914,24 +914,6 @@ public class HandSkeleton : MonoBehaviour
                 diagnosticJointIndex);
         }
 
-        if (logArticulationStateDiagnostics &&
-            fingerIndex == diagnosticFingerIndex &&
-            axisNum == 0 &&
-            diagnosticJointIndex >= 1 &&
-            Time.time >= nextArticulationStateDiagnosticTime)
-        {
-            nextArticulationStateDiagnosticTime =
-                Time.time + jointDriveDiagnosticInterval;
-            LogArticulationStateDiagnostic(
-                body,
-                trackedJoint,
-                parentJoint,
-                incomingBone,
-                outgoingBone,
-                fingerIndex,
-                diagnosticJointIndex);
-        }
-
         // Update stiffness and damping in case they have changed
 
         // Finds moment of inertia of current body and its children
@@ -954,7 +936,7 @@ public class HandSkeleton : MonoBehaviour
         float currentPhysicsAngle = body.jointPosition[axisNum] * Mathf.Rad2Deg;
         float angularError = (currentPhysicsAngle - targetAngle) * Mathf.Deg2Rad;
 
-        float driveTorque = -(drive.stiffness * angularError + drive.damping * Vector3.Dot(body.angularVelocity, axis));
+        float driveTorque = -(drive.stiffness * angularError + drive.damping * body.jointVelocity[axisNum]);
 
         // Clamp the drive torque to the torque limit
         driveTorque = Mathf.Clamp(driveTorque, -drive.forceLimit, drive.forceLimit);
@@ -1065,7 +1047,7 @@ public class HandSkeleton : MonoBehaviour
         Vector3 rootInertiaComponent = -fingertipInertialForces[fingerIndex];
         Vector3 inertiaForce = fingerInertiaComponent + rootInertiaComponent;
 
-        Debug.Log(
+        /*Debug.Log(
             $"fingerIndex: {fingerIndex}\n" +
             $"rootAccel: {rootNode.GetPhysicsAccel()}\n" +
             $"physicsForce: {physicsForce}\n" +
@@ -1073,7 +1055,7 @@ public class HandSkeleton : MonoBehaviour
             $"rootInertiaComponent: {rootInertiaComponent}\n" +
             $"inertiaForce: {inertiaForce}\n" +
             $"totalForce: {physicsForce - inertiaForce}\n"
-        );
+        );*/
 
         node.UpdateState(
             physicsForce,
@@ -1132,64 +1114,5 @@ public class HandSkeleton : MonoBehaviour
             $"anchorRotation={body.anchorRotation.eulerAngles}, " +
             $"limits=[{body.xDrive.lowerLimit:F2},{body.xDrive.upperLimit:F2}], " +
             $"jointPositionDof={body.jointPosition.dofCount}");
-    }
-
-    private void LogArticulationStateDiagnostic(
-        ArticulationBody body,
-        Transform trackedJoint,
-        Transform parentJoint,
-        Vector3 trackedIncoming,
-        Vector3 trackedOutgoing,
-        int fingerIndex,
-        int jointIndex)
-    {
-        ArticulationReducedSpace position = body.jointPosition;
-        Vector3 parentAxisX = Utils.GetArticulationRightAxis(body);
-        Vector3 parentAxisY = Utils.GetArticulationUpAxis(body);
-        Vector3 parentAxisZ = Vector3.Cross(parentAxisX, parentAxisY).normalized;
-
-        Vector3 parentAnchorWorld =
-            body.transform.parent != null
-                ? body.transform.parent.TransformPoint(body.parentAnchorPosition)
-                : body.transform.TransformPoint(body.anchorPosition);
-        Vector3 childAnchorWorld =
-            body.transform.TransformPoint(body.anchorPosition);
-        Quaternion parentFrameWorld =
-            body.transform.parent != null
-                ? body.transform.parent.rotation * body.parentAnchorRotation
-                : body.transform.rotation * body.anchorRotation;
-        Quaternion childFrameWorld =
-            body.transform.rotation * body.anchorRotation;
-        Quaternion relativeFrame =
-            Quaternion.Inverse(parentFrameWorld) * childFrameWorld;
-
-        Vector3 physicsIncoming =
-            body.transform.position - parentJoint.position;
-        Vector3 physicsOutgoing = GetBoneVector(body.transform);
-
-        string dofs = position.dofCount == 0
-            ? "none"
-            : $"[{GetJointPosition(position, 0):F3}, " +
-              $"{GetJointPosition(position, 1):F3}, " +
-              $"{GetJointPosition(position, 2):F3}] rad";
-
-        Debug.Log(
-            $"[HandSkeleton ARTICULATION DIAG] finger={fingerIndex}, " +
-            $"joint={jointIndex}, body='{body.name}', tracked='{trackedJoint.name}'\n" +
-            $"trackedIncoming={trackedIncoming.normalized}, " +
-            $"trackedOutgoing={trackedOutgoing.normalized}\n" +
-            $"physicsIncoming={physicsIncoming.normalized}, " +
-            $"physicsOutgoing={physicsOutgoing.normalized}\n" +
-            $"jointPosition={dofs}, jointVelocity={body.jointVelocity}\n" +
-            $"parentAnchorWorld={parentAnchorWorld}, " +
-            $"childAnchorWorld={childAnchorWorld}, " +
-            $"anchorDelta={(childAnchorWorld - parentAnchorWorld).magnitude:F5}\n" +
-            $"parentAxisX={parentAxisX}, parentAxisY={parentAxisY}, " +
-            $"parentAxisZ={parentAxisZ}\n" +
-            $"parentFrame={parentFrameWorld.eulerAngles}, " +
-            $"childFrame={childFrameWorld.eulerAngles}, " +
-            $"relativeFrame={relativeFrame.eulerAngles}\n" +
-            $"trackedJointWorld={trackedJoint.position}, " +
-            $"physicsJointWorld={body.transform.position}");
     }
 }
