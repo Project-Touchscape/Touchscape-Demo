@@ -47,6 +47,9 @@ public class IntegratedHapticNode : HapticNode
     private Vector3 previousRelativePosition = Vector3.zero;
     private bool hasPreviousRelativePosition;
 
+    public bool LastPhysicsForceReachedLimit { get; private set; }
+    public float LastPhysicsForceMagnitude { get; private set; }
+
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     new protected void Start()
     {
@@ -126,6 +129,10 @@ public class IntegratedHapticNode : HapticNode
         Vector3 newPhysicsTorque = ComputeTorqueOnPhysics();
 
         // Trims by max force
+        LastPhysicsForceMagnitude = newPhysicsForce.magnitude;
+        LastPhysicsForceReachedLimit =
+            maxPhysicsForce > 0f &&
+            newPhysicsForce.magnitude >= maxPhysicsForce;
         if (newPhysicsForce.magnitude > maxPhysicsForce)
         {
             newPhysicsForce = newPhysicsForce.normalized * maxPhysicsForce;

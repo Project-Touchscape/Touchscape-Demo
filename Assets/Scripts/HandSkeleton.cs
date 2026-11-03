@@ -119,6 +119,12 @@ public class HandSkeleton : MonoBehaviour
     private bool hasInitialJointOffsets;
     private bool[,,,] angleLimitWarnings =
         new bool[N_FINGERS, N_ACTIVE_BONES, 2, 2];
+    private bool[,,] torqueLimitWarnings =
+        new bool[N_FINGERS, N_ACTIVE_BONES, 2];
+    private bool rootForceLimitWarning;
+
+    private int rebuildLimit = 2;
+    private int rebuildCount = 0;
 
     void Start()
     {
@@ -135,7 +141,9 @@ public class HandSkeleton : MonoBehaviour
 
     void FixedUpdate()
     {
-        if (HasFingerGeometryChanged()) {
+        // Check if the finger geometry has changed and if we need to rebuild
+        if (rebuildCount < rebuildLimit && HasFingerGeometryChanged()) {
+            rebuildCount++;
             RebuildFingers();
 
             // Logs warning
@@ -166,6 +174,7 @@ public class HandSkeleton : MonoBehaviour
 
             // Physics timestep
             rootNode.UpdatePhysics();
+            WarnIfRootForceLimitReached();
         }
 
         // Update the articulation bodies' target angles based on the tracked joint rotations
@@ -949,9 +958,17 @@ public class HandSkeleton : MonoBehaviour
         float angularError = (currentPhysicsAngle - targetAngle) * Mathf.Deg2Rad;
 
         float driveTorque = -(drive.stiffness * angularError + drive.damping * body.jointVelocity[axisNum]);
+        float requestedTorque = driveTorque;
 
         // Clamp the drive torque to the torque limit
         driveTorque = Mathf.Clamp(driveTorque, -drive.forceLimit, drive.forceLimit);
+        WarnIfTorqueLimitReached(
+            body,
+            requestedTorque,
+            drive.forceLimit,
+            fingerIndex,
+            jointIndex,
+            axisNum);
 
         HapticNode fingertipNode = fingertipNodes[fingerIndex];
         if (fingertipNode == null)
@@ -1012,6 +1029,54 @@ public class HandSkeleton : MonoBehaviour
             );*/
 
         return drive;
+    }
+
+    private void WarnIfTorqueLimitReached(
+        ArticulationBody body,
+        float requestedTorque,
+        float torqueLimit,
+        int fingerIndex,
+        int jointIndex,
+        int axisNum)
+    {
+        bool atLimit = torqueLimit > 0f &&
+            Mathf.Abs(requestedTorque) >= torqueLimit;
+        if (!atLimit)
+        {
+            torqueLimitWarnings[fingerIndex, jointIndex, axisNum] = false;
+            return;
+        }
+
+        if (torqueLimitWarnings[fingerIndex, jointIndex, axisNum])
+            return;
+
+        torqueLimitWarnings[fingerIndex, jointIndex, axisNum] = true;
+        string axisName = axisNum == 0 ? "X" : "Y";
+        Debug.LogWarning(
+            $"Finger {fingerIndex}, joint {jointIndex}, axis {axisName} " +
+            $"requested torque {requestedTorque:F3} reached the torque limit " +
+            $"{torqueLimit:F3}.",
+            body);
+    }
+
+    private void WarnIfRootForceLimitReached()
+    {
+        bool atLimit = rootNode != null &&
+            rootNode.LastPhysicsForceReachedLimit;
+        if (!atLimit)
+        {
+            rootForceLimitWarning = false;
+            return;
+        }
+
+        if (rootForceLimitWarning)
+            return;
+
+        rootForceLimitWarning = true;
+        Debug.LogWarning(
+            $"Root node requested force {rootNode.LastPhysicsForceMagnitude:F3} " +
+            $"which reached the force limit {rootNode.maxPhysicsForce:F3}.",
+            rootNode);
     }
 
     private void WarnIfAngleLimitReached(
@@ -1075,42 +1140,27 @@ public class HandSkeleton : MonoBehaviour
             outgoingBone.sqrMagnitude <= Mathf.Epsilon)
             return 0f;
 
-        Quaternion frame = GetJointFrame(
-            joint,
-            incomingBone,
-            Quaternion.identity);
-        Vector3 localOutgoing =
-            Quaternion.Inverse(frame) * outgoingBone.normalized;
+        Vector3 normalizedIncoming = incomingBone.normalized;
+        Vector3 normalizedOutgoing = outgoingBone.normalized;
+        Vector3 flexionAxis = joint.right.normalized;
+        float flexionAngle = Utils.SignedAngleAboutAxis(
+            normalizedIncoming,
+            normalizedOutgoing,
+            flexionAxis);
 
         if (axisType == 0)
-        {
-            return Mathf.Atan2(
-                -localOutgoing.y,
-                -localOutgoing.z) * Mathf.Rad2Deg;
-        }
+            return flexionAngle;
 
-        return -Mathf.Atan2(
-            localOutgoing.x,
-            -localOutgoing.z) * Mathf.Rad2Deg;
-    }
-
-    private Quaternion GetJointFrame(
-        Transform trackedJoint,
-        Vector3 incomingBone,
-        Quaternion fallback)
-    {
-        if (incomingBone.sqrMagnitude <= Mathf.Epsilon)
-            return fallback;
-
-        Vector3 upAxis = Vector3.ProjectOnPlane(
-            trackedJoint.up,
-            incomingBone.normalized);
-        if (upAxis.sqrMagnitude <= Mathf.Epsilon)
-            return fallback;
-
-        return Quaternion.LookRotation(
-            -incomingBone.normalized,
-            upAxis.normalized);
+        Vector3 unswungOutgoing = Quaternion.AngleAxis(
+            -flexionAngle,
+            flexionAxis) * normalizedOutgoing;
+        Vector3 unswungSplayAxis = Quaternion.AngleAxis(
+            -flexionAngle,
+            flexionAxis) * joint.up.normalized;
+        return Utils.SignedAngleAboutAxis(
+            normalizedIncoming,
+            unswungOutgoing,
+            unswungSplayAxis);
     }
 
     private float GetJointPosition(
@@ -1185,19 +1235,19 @@ public class HandSkeleton : MonoBehaviour
             : Vector3.Angle(
                 outgoingBone,
                 physicsOutgoing);
-        float trackedAngleOnAxis = Vector3.SignedAngle(
+        float trackedAngleOnAxis = Utils.SignedAngleAboutAxis(
             incomingBone,
             outgoingBone,
             axis);
-        float physicsAngleOnAxis = Vector3.SignedAngle(
+        float physicsAngleOnAxis = Utils.SignedAngleAboutAxis(
             physicsIncoming,
             physicsOutgoing,
             axis);
-        float trackedOppositeAxisAngle = Vector3.SignedAngle(
+        float trackedOppositeAxisAngle = Utils.SignedAngleAboutAxis(
             incomingBone,
             outgoingBone,
             -axis);
-        float physicsOppositeAxisAngle = Vector3.SignedAngle(
+        float physicsOppositeAxisAngle = Utils.SignedAngleAboutAxis(
             physicsIncoming,
             physicsOutgoing,
             -axis);

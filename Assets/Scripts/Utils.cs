@@ -166,6 +166,33 @@ public static class Utils
         return axis.normalized * (angle * Mathf.Deg2Rad / timeStep);
     }
 
+    public static float SignedAngleAboutAxis(
+        Vector3 from,
+        Vector3 to,
+        Vector3 axis)
+    {
+        if (from.sqrMagnitude <= Mathf.Epsilon ||
+            to.sqrMagnitude <= Mathf.Epsilon ||
+            axis.sqrMagnitude <= Mathf.Epsilon)
+            return 0f;
+
+        Vector3 normalizedAxis = axis.normalized;
+        Vector3 projectedFrom = Vector3.ProjectOnPlane(from, normalizedAxis);
+        Vector3 projectedTo = Vector3.ProjectOnPlane(to, normalizedAxis);
+        if (projectedFrom.sqrMagnitude <= Mathf.Epsilon ||
+            projectedTo.sqrMagnitude <= Mathf.Epsilon)
+            return 0f;
+
+        projectedFrom.Normalize();
+        projectedTo.Normalize();
+
+        float angle = Vector3.Angle(projectedFrom, projectedTo);
+        float sign = Mathf.Sign(Vector3.Dot(
+            Vector3.Cross(projectedFrom, projectedTo),
+            normalizedAxis));
+        return angle * (sign == 0f ? 1f : sign);
+    }
+
     public static Vector3 MultiplyInertia(Matrix4x4 inertia, Vector3 vector)
     {
         return new Vector3(
