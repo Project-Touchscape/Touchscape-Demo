@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.XR.Hands;
 using System.Collections.Generic;
+using System.Text;
 using Unity.VisualScripting;
 
 public class HandSkeleton : MonoBehaviour
@@ -87,6 +88,7 @@ public class HandSkeleton : MonoBehaviour
     [Min(0)] public int diagnosticJointIndex = 1;
     private float nextJointDriveDiagnosticTime;
     public bool logArticulationStateDiagnostics = false;
+    [Min(0.05f)] public float articulationStateDiagnosticInterval = 0.5f;
     private float nextArticulationStateDiagnosticTime;
 
     private IntegratedHapticNode rootNode;
@@ -208,6 +210,14 @@ public class HandSkeleton : MonoBehaviour
             // Updates fingertip haptic node
             UpdateFingertipNode(fingerIndex);
         }
+
+        if (logArticulationStateDiagnostics &&
+            Time.time >= nextArticulationStateDiagnosticTime)
+        {
+            nextArticulationStateDiagnosticTime =
+                Time.time + articulationStateDiagnosticInterval;
+            LogArticulationStateDiagnostics();
+        }
     }
 
     private bool IsThumb(int fingerIndex)
@@ -286,7 +296,16 @@ public class HandSkeleton : MonoBehaviour
 
             if (trackedRoot != null)
             {
-                currentJoint.transform.position = gameObject.transform.TransformPoint(trackedRoot.InverseTransformPoint(trackedJoint.position));
+                Vector3 relativeRootPosition =
+                    trackedRoot.InverseTransformPoint(trackedJoint.position);
+                Quaternion relativeRootRotation =
+                    Quaternion.Inverse(trackedRoot.rotation) *
+                    trackedJoint.rotation;
+
+                currentJoint.transform.position =
+                    gameObject.transform.TransformPoint(relativeRootPosition);
+                currentJoint.transform.rotation =
+                    gameObject.transform.rotation * relativeRootRotation;
             }
 
             for (int jointIndex = 0; jointIndex < GetBonesPerFinger(fingerIndex); jointIndex++)
@@ -380,9 +399,13 @@ public class HandSkeleton : MonoBehaviour
                             1);
 
                     initialJointOffsets[fingerIndex, jointIndex, 0] =
-                        physicsFlexion - GetJointPositionDegrees(body, 0);
+                        Mathf.DeltaAngle(
+                            GetJointPositionDegrees(body, 0),
+                            physicsFlexion);
                     initialJointOffsets[fingerIndex, jointIndex, 1] =
-                        physicsSplay - GetJointPositionDegrees(body, 1);
+                        Mathf.DeltaAngle(
+                            GetJointPositionDegrees(body, 1),
+                            physicsSplay);
 
                     ArticulationDrive xDrive = body.xDrive;
                     float xOffset =
@@ -751,27 +774,6 @@ public class HandSkeleton : MonoBehaviour
         return null;
     }
 
-    private Quaternion GetJointFrame(
-        Transform trackedJoint,
-        Vector3 incomingBone,
-        Quaternion fallback)
-    {
-        if (incomingBone.sqrMagnitude <= Mathf.Epsilon)
-            return fallback;
-
-        Vector3 incomingAxis = incomingBone.normalized;
-        Vector3 upAxis = Vector3.ProjectOnPlane(
-            trackedJoint.up,
-            incomingAxis);
-
-        if (upAxis.sqrMagnitude <= Mathf.Epsilon)
-            return fallback;
-
-        return Quaternion.LookRotation(
-            -incomingAxis,
-            upAxis.normalized);
-    }
-
     private void UpdateBoneCollider(int fingerIndex, int jointIndex, CapsuleCollider collider, float boneLength)
     {
         // Gets the bone width for the current joint
@@ -906,7 +908,7 @@ public class HandSkeleton : MonoBehaviour
         if (logJointDriveDiagnostics &&
             fingerIndex == diagnosticFingerIndex &&
             axisNum == 0 &&
-            diagnosticJointIndex >= 1 &&
+            jointIndex == diagnosticJointIndex &&
             Time.time >= nextJointDriveDiagnosticTime)
         {
             nextJointDriveDiagnosticTime =
@@ -921,7 +923,7 @@ public class HandSkeleton : MonoBehaviour
                 trackedAngle,
                 targetAngle,
                 fingerIndex,
-                diagnosticJointIndex);
+                jointIndex);
         }
 
         // Update stiffness and damping in case they have changed
@@ -1080,14 +1082,35 @@ public class HandSkeleton : MonoBehaviour
         Vector3 localOutgoing =
             Quaternion.Inverse(frame) * outgoingBone.normalized;
 
-        // The frame has +X to the left, +Y up, and -Z along the incoming
-        // bone. With the hand's left-handed anatomical convention, positive
-        // flexion is toward -Y and positive splay is toward +X.
-        float denominator = Mathf.Max(-localOutgoing.z, 0.0001f);
         if (axisType == 0)
-            return Mathf.Atan2(-localOutgoing.y, denominator) * Mathf.Rad2Deg;
+        {
+            return Mathf.Atan2(
+                -localOutgoing.y,
+                -localOutgoing.z) * Mathf.Rad2Deg;
+        }
 
-        return -Mathf.Atan2(localOutgoing.x, denominator) * Mathf.Rad2Deg;
+        return -Mathf.Atan2(
+            localOutgoing.x,
+            -localOutgoing.z) * Mathf.Rad2Deg;
+    }
+
+    private Quaternion GetJointFrame(
+        Transform trackedJoint,
+        Vector3 incomingBone,
+        Quaternion fallback)
+    {
+        if (incomingBone.sqrMagnitude <= Mathf.Epsilon)
+            return fallback;
+
+        Vector3 upAxis = Vector3.ProjectOnPlane(
+            trackedJoint.up,
+            incomingBone.normalized);
+        if (upAxis.sqrMagnitude <= Mathf.Epsilon)
+            return fallback;
+
+        return Quaternion.LookRotation(
+            -incomingBone.normalized,
+            upAxis.normalized);
     }
 
     private float GetJointPosition(
@@ -1147,33 +1170,187 @@ public class HandSkeleton : MonoBehaviour
         float actualAngle = body.jointPosition.dofCount > 0
             ? body.jointPosition[0] * Mathf.Rad2Deg
             : float.NaN;
-        float sameAxisAngle = Vector3.SignedAngle(
+        Transform physicsParent = body.transform.parent;
+        Vector3 physicsIncoming = physicsParent == null
+            ? Vector3.zero
+            : body.transform.position - physicsParent.position;
+        Vector3 physicsOutgoing = GetBoneVector(body.transform);
+        float incomingDirectionDifference = physicsIncoming.sqrMagnitude <= Mathf.Epsilon
+            ? float.NaN
+            : Vector3.Angle(
+                incomingBone,
+                physicsIncoming);
+        float outgoingDirectionDifference = physicsOutgoing.sqrMagnitude <= Mathf.Epsilon
+            ? float.NaN
+            : Vector3.Angle(
+                outgoingBone,
+                physicsOutgoing);
+        float trackedAngleOnAxis = Vector3.SignedAngle(
             incomingBone,
             outgoingBone,
             axis);
-        float oppositeAxisAngle = Vector3.SignedAngle(
+        float physicsAngleOnAxis = Vector3.SignedAngle(
+            physicsIncoming,
+            physicsOutgoing,
+            axis);
+        float trackedOppositeAxisAngle = Vector3.SignedAngle(
             incomingBone,
             outgoingBone,
+            -axis);
+        float physicsOppositeAxisAngle = Vector3.SignedAngle(
+            physicsIncoming,
+            physicsOutgoing,
             -axis);
         float axisIncomingAlignment = Vector3.Dot(
             axis.normalized,
             incomingBone.normalized);
-        Vector3 physicsIncoming = body.transform.position - parentJoint.position;
-        Vector3 physicsOutgoing = GetBoneVector(body.transform);
+        float physicsAxisIncomingAlignment = Vector3.Dot(
+            axis.normalized,
+            physicsIncoming.normalized);
 
         Debug.Log(
             $"[HandSkeleton DRIVE DIAG] finger={fingerIndex}, joint={jointIndex}, " +
             $"physics='{body.name}', tracked='{trackedJoint.name}'\n" +
             $"target={targetAngle:F2} deg, trackedAngle={trackedAngle:F2} deg, " +
             $"actual={actualAngle:F2} deg, error={Mathf.DeltaAngle(actualAngle, targetAngle):F2} deg\n" +
-            $"axis={axis}, incoming={incomingBone.normalized}, outgoing={outgoingBone.normalized}\n" +
-            $"sameAxis={sameAxisAngle:F2} deg, oppositeAxis={oppositeAxisAngle:F2} deg\n" +
-            $"axisIncomingDot={axisIncomingAlignment:F3} " +
-            $"(0 is perpendicular)\n" +
+            $"axis={axis}\n" +
+            $"trackedIncoming={incomingBone.normalized}, " +
+            $"trackedOutgoing={outgoingBone.normalized}\n" +
             $"physicsIncoming={physicsIncoming.normalized}, " +
             $"physicsOutgoing={physicsOutgoing.normalized}\n" +
+            $"incomingDirectionDifference={incomingDirectionDifference:F2} deg, " +
+            $"outgoingDirectionDifference={outgoingDirectionDifference:F2} deg\n" +
+            $"trackedAngleOnAxis={trackedAngleOnAxis:F2} deg, " +
+            $"physicsAngleOnAxis={physicsAngleOnAxis:F2} deg\n" +
+            $"trackedOppositeAxis={trackedOppositeAxisAngle:F2} deg, " +
+            $"physicsOppositeAxis={physicsOppositeAxisAngle:F2} deg\n" +
+            $"trackedAxisIncomingDot={axisIncomingAlignment:F3}, " +
+            $"physicsAxisIncomingDot={physicsAxisIncomingAlignment:F3} " +
+            "(0 is perpendicular)\n" +
             $"anchorRotation={body.anchorRotation.eulerAngles}, " +
             $"limits=[{body.xDrive.lowerLimit:F2},{body.xDrive.upperLimit:F2}], " +
             $"jointPositionDof={body.jointPosition.dofCount}");
+    }
+
+    private void LogArticulationStateDiagnostics()
+    {
+        StringBuilder diagnostics = new StringBuilder(
+            "[HandSkeleton FULL STATE DIAG]\n");
+        int fingerCount = Mathf.Min(
+            N_FINGERS,
+            Mathf.Min(fingers.Length, trackedFingers.Length));
+
+        for (int fingerIndex = 0; fingerIndex < fingerCount; fingerIndex++)
+        {
+            Transform trackedJoint = trackedFingers[fingerIndex];
+            GameObject currentJoint = fingers[fingerIndex];
+            diagnostics.AppendLine($"finger={fingerIndex}");
+
+            for (int jointIndex = 0;
+                 jointIndex < GetBonesPerFinger(fingerIndex) &&
+                 trackedJoint != null &&
+                 currentJoint != null;
+                 jointIndex++)
+            {
+                ArticulationBody body =
+                    currentJoint.GetComponent<ArticulationBody>();
+                if (body == null)
+                {
+                    diagnostics.AppendLine(
+                        $"  joint={jointIndex} physics body missing");
+                    break;
+                }
+
+                Transform trackedParent = trackedJoint.parent;
+                Transform physicsParent = body.transform.parent;
+                Vector3 trackedIncoming = trackedParent == null
+                    ? Vector3.zero
+                    : trackedJoint.position - trackedParent.position;
+                Vector3 physicsIncoming = physicsParent == null
+                    ? Vector3.zero
+                    : body.transform.position - physicsParent.position;
+                Vector3 trackedOutgoing = GetBoneVector(trackedJoint);
+                Vector3 physicsOutgoing = GetBoneVector(body.transform);
+
+                diagnostics.AppendLine(
+                    $"  joint={jointIndex}, body='{body.name}', " +
+                    $"tracked='{trackedJoint.name}'");
+                diagnostics.AppendLine(
+                    $"    tracked world pos={trackedJoint.position}, " +
+                    $"rot={trackedJoint.rotation.eulerAngles}");
+                diagnostics.AppendLine(
+                    $"    tracked local pos={trackedJoint.localPosition}, " +
+                    $"rot={trackedJoint.localRotation.eulerAngles}");
+                diagnostics.AppendLine(
+                    $"    physics world pos={body.transform.position}, " +
+                    $"rot={body.transform.rotation.eulerAngles}");
+                diagnostics.AppendLine(
+                    $"    physics local pos={body.transform.localPosition}, " +
+                    $"rot={body.transform.localRotation.eulerAngles}");
+                diagnostics.AppendLine(
+                    $"    tracked incoming={trackedIncoming.normalized}, " +
+                    $"outgoing={trackedOutgoing.normalized}");
+                diagnostics.AppendLine(
+                    $"    physics incoming={physicsIncoming.normalized}, " +
+                    $"outgoing={physicsOutgoing.normalized}");
+                diagnostics.AppendLine(
+                    $"    direction delta incoming=" +
+                    $"{GetDirectionDifference(trackedIncoming, physicsIncoming):F2} deg, " +
+                    $"outgoing=" +
+                    $"{GetDirectionDifference(trackedOutgoing, physicsOutgoing):F2} deg");
+                diagnostics.AppendLine(
+                    $"    joint position=" +
+                    $"{FormatReducedSpace(body.jointPosition, true)}, " +
+                    $"velocity={FormatReducedSpace(body.jointVelocity, true)} /s");
+                diagnostics.AppendLine(
+                    $"    xDrive target={body.xDrive.target:F2}, " +
+                    $"limits=[{body.xDrive.lowerLimit:F2}," +
+                    $"{body.xDrive.upperLimit:F2}], " +
+                    $"yDrive target={body.yDrive.target:F2}, " +
+                    $"limits=[{body.yDrive.lowerLimit:F2}," +
+                    $"{body.yDrive.upperLimit:F2}]");
+                diagnostics.AppendLine(
+                    $"    anchor position={body.anchorPosition}, " +
+                    $"rotation={body.anchorRotation.eulerAngles}");
+
+                trackedJoint = GetBoneChild(trackedJoint);
+                Transform physicsChild = GetBoneChild(body.transform);
+                currentJoint = physicsChild == null
+                    ? null
+                    : physicsChild.gameObject;
+            }
+        }
+
+        Debug.Log(diagnostics.ToString(), this);
+    }
+
+    private float GetDirectionDifference(Vector3 first, Vector3 second)
+    {
+        return first.sqrMagnitude <= Mathf.Epsilon ||
+            second.sqrMagnitude <= Mathf.Epsilon
+            ? float.NaN
+            : Vector3.Angle(first, second);
+    }
+
+    private string FormatReducedSpace(
+        ArticulationReducedSpace reducedSpace,
+        bool convertToDegrees)
+    {
+        if (reducedSpace.dofCount == 0)
+            return "[]";
+
+        StringBuilder values = new StringBuilder("[");
+        for (int index = 0; index < reducedSpace.dofCount; index++)
+        {
+            if (index > 0)
+                values.Append(", ");
+            float value = convertToDegrees
+                ? reducedSpace[index] * Mathf.Rad2Deg
+                : reducedSpace[index];
+            values.Append($"{value:F3}");
+        }
+
+        values.Append(convertToDegrees ? "] deg" : "]");
+        return values.ToString();
     }
 }
