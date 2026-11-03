@@ -46,7 +46,6 @@ public class IntegratedHapticNode : HapticNode
     private int fixedStep;
     private Vector3 previousRelativePosition = Vector3.zero;
     private bool hasPreviousRelativePosition;
-
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     new protected void Start()
     {
@@ -242,42 +241,13 @@ public class IntegratedHapticNode : HapticNode
 
     private void DistributeWrenchToArticulation(Vector3 force, Vector3 torque)
     {
-        if (physicsMass <= Mathf.Epsilon)
+        if (physicsAb == null)
         {
             return;
         }
 
-        // Solve Euler's equation for the aggregate angular acceleration.
-        // The gyroscopic term is required when the equivalent rigid body is
-        // already rotating.
-        Vector3 angularVelocity = physicsAb.angularVelocity;
-        Vector3 angularMomentum =
-            Utils.MultiplyInertia(physicsInertia, angularVelocity);
-        Vector3 angularAcceleration = Utils.MultiplyInverseInertia(
-            physicsInertia,
-            torque - Vector3.Cross(angularVelocity, angularMomentum));
-        Vector3 accel = force / physicsMass;
-
-        // Gets all articulation bodies in the hierarchy
-        ArticulationBody[] articulationBodies = gameObject.GetComponentsInChildren<ArticulationBody>();
-
-        // Apply the acceleration field of an equivalent rigid body to every
-        // body at its center of mass. The force contribution accounts for
-        // orbital inertia; the torque contribution accounts for each body's
-        // intrinsic inertia.
-        foreach (ArticulationBody ab in articulationBodies)
-        {
-            Utils.GetArticulationBodyWrench(
-                physicsAb,
-                physicsCOM,
-                ab,
-                accel,
-                angularAcceleration,
-                out Vector3 childForce,
-                out Vector3 childTorque);
-            ab.AddForce(childForce);
-            ab.AddTorque(childTorque);
-        }
+        physicsAb.AddForce(force);
+        physicsAb.AddTorque(torque);
     }
 
     public ArticulationBody GetPhysicsAb()
