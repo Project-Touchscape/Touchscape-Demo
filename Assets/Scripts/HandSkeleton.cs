@@ -964,7 +964,7 @@ public class HandSkeleton : MonoBehaviour
             return drive;
 
         Vector3 jointToFingertip =
-            fingertipNode.transform.position - jointPoint;
+            fingertipNode.trackedTransform.position - jointPoint;
 
         // Gets relationship between joint torque and fingertip force
         Vector3 jacobianColumn = Vector3.Cross(axis, jointToFingertip);
