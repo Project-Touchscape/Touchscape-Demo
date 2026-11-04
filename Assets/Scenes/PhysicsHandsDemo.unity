@@ -144,7 +144,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 639686448, guid: b3ed8a0a703ebd34a9e44ed3d9f1fcf6, type: 3}
       propertyPath: m_Enabled
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 141466980049140221, guid: b3ed8a0a703ebd34a9e44ed3d9f1fcf6, type: 3}
       propertyPath: m_LocalPosition.x
@@ -268,11 +268,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5828388934748857539, guid: b3ed8a0a703ebd34a9e44ed3d9f1fcf6, type: 3}
       propertyPath: m_Enabled
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6627571522594998540, guid: b3ed8a0a703ebd34a9e44ed3d9f1fcf6, type: 3}
       propertyPath: m_Enabled
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6854500588692230153, guid: b3ed8a0a703ebd34a9e44ed3d9f1fcf6, type: 3}
       propertyPath: m_Layer
@@ -387,11 +387,11 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 513866637, guid: 3f7511fbc40ae7a4b89c3298a3de199d, type: 3}
       propertyPath: m_Enabled
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 513866642, guid: 3f7511fbc40ae7a4b89c3298a3de199d, type: 3}
       propertyPath: m_Enabled
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 463836154022461713, guid: 3f7511fbc40ae7a4b89c3298a3de199d, type: 3}
       propertyPath: m_Layer
@@ -467,7 +467,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2726143015963839043, guid: 3f7511fbc40ae7a4b89c3298a3de199d, type: 3}
       propertyPath: m_Enabled
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 2762017894417239121, guid: 3f7511fbc40ae7a4b89c3298a3de199d, type: 3}
       propertyPath: m_Layer
@@ -1049,11 +1049,11 @@ MonoBehaviour:
   palmPosDamping: 1
   palmRotStiffness: 0.9
   palmRotDamping: 1
-  palmMaxForce: 1000
-  palmMaxTorque: 500
-  fingerStiffness: 1
+  palmMaxForce: 10000
+  palmMaxTorque: 5000
+  fingerStiffness: 20
   fingerDamping: 1
-  fingerMaxTorque: 500
+  fingerMaxTorque: 5000
   rootPositionRebuildThreshold: 0.002
   boneLengthRebuildThreshold: 0.002
   logJointDriveDiagnostics: 0
@@ -2141,11 +2141,11 @@ MonoBehaviour:
   palmPosDamping: 1
   palmRotStiffness: 0.9
   palmRotDamping: 1
-  palmMaxForce: 1000
-  palmMaxTorque: 500
-  fingerStiffness: 1
+  palmMaxForce: 10000
+  palmMaxTorque: 5000
+  fingerStiffness: 20
   fingerDamping: 1
-  fingerMaxTorque: 500
+  fingerMaxTorque: 5000
   rootPositionRebuildThreshold: 0.002
   boneLengthRebuildThreshold: 0.002
   logJointDriveDiagnostics: 0

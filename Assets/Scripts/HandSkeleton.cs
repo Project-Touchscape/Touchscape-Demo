@@ -60,7 +60,6 @@ public class HandSkeleton : MonoBehaviour
     public float palmMaxForce = 20f;
     public float palmMaxTorque = 40f;
 
-    [Range(0f, 1f)]
     public float fingerStiffness = 1f;
 
     public float fingerDamping = 1f;
@@ -107,8 +106,6 @@ public class HandSkeleton : MonoBehaviour
     private Vector3[] fingertipLinearMomenta = new Vector3[N_FINGERS];
     private Vector3[] prevFingertipForces = new Vector3[N_FINGERS];
     private Vector3[] fingertipForces = new Vector3[N_FINGERS];
-    private Vector3[] prevFingertipInertialForces = new Vector3[N_FINGERS];
-    private Vector3[] fingertipInertialForces = new Vector3[N_FINGERS];
 
     private bool prevUseGravity = false;
     private Vector3[] builtFingerRootPositions = new Vector3[N_FINGERS];
@@ -997,29 +994,6 @@ public class HandSkeleton : MonoBehaviour
         Vector3 linearMomentumContribution = jacobianColumn * angularMomentum;
         fingertipLinearMomenta[fingerIndex] += linearMomentumContribution;
 
-        // Gets inertial forces at fingertips due to root node acceleration
-        float effectiveJointTorque = 0f;
-        // Gets all articulation bodies upstream of joint
-        ArticulationBody[] articulationBodies = gameObject.GetComponentsInChildren<ArticulationBody>();
-        foreach (ArticulationBody ab in articulationBodies) {
-            Utils.GetArticulationBodyWrench(
-                    rootNode.GetPhysicsAb(),
-                    rootNode.GetPhysicsCOM(),
-                    ab,
-                    -rootNode.GetPhysicsAccel(),
-                    -rootNode.GetPhysicsAngAccel(),
-                    out Vector3 childForce,
-                    out Vector3 childTorque);
-
-            // Finds torque on the joint due to the linear acceleration and angular acceleration
-            Vector3 jointToCOM = ab.worldCenterOfMass - jointPoint;
-            Vector3 effectiveTorque = Vector3.Cross(jointToCOM, childForce) + childTorque;
-            effectiveJointTorque += Vector3.Dot(effectiveTorque, axis);
-        }
-
-        // Finds the contribution of the effective joint torque to the fingertip inertial force
-        fingertipInertialForces[fingerIndex] += jacobianColumn * effectiveJointTorque;
-
         /*Debug.Log(
             $"fingerIndex: {fingerIndex}\n" +
             $"jointToFingertip: {jointToFingertip}\n" +
@@ -1176,10 +1150,9 @@ public class HandSkeleton : MonoBehaviour
         if (node == null)
             return;
 
-        Vector3 physicsForce = -prevFingertipForces[fingerIndex] - fingertipInertialForces[fingerIndex];
+        Vector3 physicsForce = -prevFingertipForces[fingerIndex];
         Vector3 fingerInertiaComponent = -(fingertipLinearMomenta[fingerIndex] - prevFingertipLinearMomenta[fingerIndex]) / Time.fixedDeltaTime;
-        Vector3 rootInertiaComponent = -fingertipInertialForces[fingerIndex];
-        Vector3 inertiaForce = fingerInertiaComponent + rootInertiaComponent;
+        Vector3 inertiaForce = fingerInertiaComponent;
 
         /*Debug.Log(
             $"fingerIndex: {fingerIndex}\n" +
@@ -1198,11 +1171,9 @@ public class HandSkeleton : MonoBehaviour
         // Resets fingertip linear momenta and forces for the next frame
         prevFingertipLinearMomenta[fingerIndex] = fingertipLinearMomenta[fingerIndex];
         prevFingertipForces[fingerIndex] = fingertipForces[fingerIndex];
-        prevFingertipInertialForces[fingerIndex] = fingertipInertialForces[fingerIndex];
 
         fingertipLinearMomenta[fingerIndex] = Vector3.zero;
         fingertipForces[fingerIndex] = Vector3.zero;
-        fingertipInertialForces[fingerIndex] = Vector3.zero;
     }
 
     private void LogJointDriveDiagnostic(
