@@ -11,6 +11,7 @@ public class HapticNode : MonoBehaviour
 
     // Tracked object
     public Transform trackedTransform;
+    private readonly List<Collider> attachedColliders = new List<Collider>();
 
     [Range(0f, 1f)]
     public float posStiffness;
@@ -25,9 +26,9 @@ public class HapticNode : MonoBehaviour
 
     // Force visualization object
     private GameObject forceVisual;
+    private readonly List<HapticCollisionHandler> collisionHandlers =
+        new List<HapticCollisionHandler>();
     private bool initialized;
-
-    public static IReadOnlyList<HapticNode> ActiveNodes => activeNodes;
 
     void OnEnable()
     {
@@ -67,7 +68,62 @@ public class HapticNode : MonoBehaviour
         forceVisual = Instantiate(haptics.forceVisualPrefab, trackedTransform.position, trackedTransform.rotation);
         forceVisual.transform.SetParent(trackedTransform, true);
         forceVisual.SetActive(false);
+        ConfigureCollisionHandler();
         initialized = true;
+    }
+
+    public bool HasActiveCollision =>
+        collisionHandlers.Exists(handler => handler.HasActiveCollision);
+
+    public void SetAttachedCollider(Collider collider)
+    {
+        SetAttachedColliders(collider == null ? null : new List<Collider> { collider });
+    }
+
+    public void SetAttachedColliders(IReadOnlyList<Collider> colliders)
+    {
+        attachedColliders.Clear();
+        if (colliders != null)
+        {
+            for (int index = 0; index < colliders.Count; index++)
+            {
+                if (colliders[index] != null &&
+                    !attachedColliders.Contains(colliders[index]))
+                {
+                    attachedColliders.Add(colliders[index]);
+                }
+            }
+        }
+
+        if (initialized)
+            ConfigureCollisionHandler();
+    }
+
+    private void ConfigureCollisionHandler()
+    {
+        collisionHandlers.Clear();
+
+        for (int index = 0; index < attachedColliders.Count; index++)
+        {
+            Collider collider = attachedColliders[index];
+            AddCollisionHandler(collider.gameObject);
+
+            ArticulationBody body =
+                collider.GetComponentInParent<ArticulationBody>();
+            if (body != null)
+                AddCollisionHandler(body.gameObject);
+        }
+    }
+
+    private void AddCollisionHandler(GameObject target)
+    {
+        HapticCollisionHandler handler =
+            target.GetComponent<HapticCollisionHandler>();
+        if (handler == null)
+            handler = target.AddComponent<HapticCollisionHandler>();
+
+        if (!collisionHandlers.Contains(handler))
+            collisionHandlers.Add(handler);
     }
 
     // Usually called from the physics update loop to update the wrench on the physics object
@@ -78,7 +134,14 @@ public class HapticNode : MonoBehaviour
         // If inertia is not enabled, subtracts the inertia force from the physics force
         if (!haptics.useInertia)
         {
-            physicsForce -= inertiaForce;
+            if (HasActiveCollision)
+            {
+                // Only uses non-inertial force if there is an active collision
+                physicsForce -= inertiaForce;
+            } else
+            {
+                physicsForce = Vector3.zero;
+            }
         }
 
         // Clamps force to minimum
@@ -107,6 +170,39 @@ public class HapticNode : MonoBehaviour
         else
         {
             forceVisual.SetActive(false);
+        }
+    }
+
+    public sealed class HapticCollisionHandler : MonoBehaviour
+    {
+        private readonly HashSet<int> activeCollisions = new HashSet<int>();
+
+        public bool HasActiveCollision => activeCollisions.Count > 0;
+
+        private void OnCollisionEnter(Collision collision)
+        {
+            Debug.Log($"[{name}] Collision enter with {collision.collider.name}");
+            activeCollisions.Add(collision.collider.GetInstanceID());
+        }
+
+        private void OnCollisionExit(Collision collision)
+        {
+            activeCollisions.Remove(collision.collider.GetInstanceID());
+        }
+
+        private void OnTriggerEnter(Collider other)
+        {
+            activeCollisions.Add(other.GetInstanceID());
+        }
+
+        private void OnTriggerExit(Collider other)
+        {
+            activeCollisions.Remove(other.GetInstanceID());
+        }
+
+        private void OnDisable()
+        {
+            activeCollisions.Clear();
         }
     }
 }

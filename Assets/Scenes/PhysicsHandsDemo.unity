@@ -740,7 +740,7 @@ Transform:
   m_GameObject: {fileID: 603740403}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0.5, z: 0.75}
+  m_LocalPosition: {x: 0, y: 0.5, z: 0.979}
   m_LocalScale: {x: 2, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1051,7 +1051,7 @@ MonoBehaviour:
   palmRotDamping: 1
   palmMaxForce: 10000
   palmMaxTorque: 5000
-  fingerStiffness: 20
+  fingerStiffness: 50
   fingerDamping: 1
   fingerMaxTorque: 5000
   rootPositionRebuildThreshold: 0.002
@@ -2143,7 +2143,7 @@ MonoBehaviour:
   palmRotDamping: 1
   palmMaxForce: 10000
   palmMaxTorque: 5000
-  fingerStiffness: 20
+  fingerStiffness: 50
   fingerDamping: 1
   fingerMaxTorque: 5000
   rootPositionRebuildThreshold: 0.002

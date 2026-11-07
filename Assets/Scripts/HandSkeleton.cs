@@ -558,6 +558,7 @@ public class HandSkeleton : MonoBehaviour
         // Always apply the configured hand material, including when the collider
         // was already present on the child.
         palmCollider.material = material;
+        rootNode.SetAttachedCollider(palmCollider);
 
         // Adds fixed articulation body to palm child object
         ArticulationBody palmBody = palmChild.GetComponent<ArticulationBody>();
@@ -745,8 +746,27 @@ public class HandSkeleton : MonoBehaviour
         if (trackedJoint == null)
             return;
 
+        List<Collider> fingerColliders = new List<Collider>();
+        Transform fingerJoint = fingers[fingerIndex].transform;
+        for (int jointIndex = 0;
+             jointIndex < GetBonesPerFinger(fingerIndex) &&
+             fingerJoint != null;
+             jointIndex++)
+        {
+            Transform jointCollider =
+                fingerJoint.Find(FingerColliderName);
+            Collider collider = jointCollider == null
+                ? null
+                : jointCollider.GetComponent<Collider>();
+            if (collider != null)
+                fingerColliders.Add(collider);
+
+            fingerJoint = GetBoneChild(fingerJoint);
+        }
+
         node.haptics = haptics;
         node.trackedTransform = trackedJoint;
+        node.SetAttachedColliders(fingerColliders);
         fingertipNodes[fingerIndex] = node;
     }
 
@@ -1108,7 +1128,7 @@ public class HandSkeleton : MonoBehaviour
         Transform joint,
         Vector3 incomingBone,
         Vector3 outgoingBone,
-        int axisType)
+        int axisNum)
     {
         if (incomingBone.sqrMagnitude <= Mathf.Epsilon ||
             outgoingBone.sqrMagnitude <= Mathf.Epsilon)
@@ -1122,7 +1142,7 @@ public class HandSkeleton : MonoBehaviour
             normalizedOutgoing,
             flexionAxis);
 
-        if (axisType == 0)
+        if (axisNum == 0)
             return flexionAngle;
 
         Vector3 unswungOutgoing = Quaternion.AngleAxis(
@@ -1135,13 +1155,6 @@ public class HandSkeleton : MonoBehaviour
             normalizedIncoming,
             unswungOutgoing,
             unswungSplayAxis);
-    }
-
-    private float GetJointPosition(
-        ArticulationReducedSpace position,
-        int index)
-    {
-        return position.dofCount > index ? position[index] : 0f;
     }
 
     private void UpdateFingertipNode(int fingerIndex)
@@ -1248,7 +1261,6 @@ public class HandSkeleton : MonoBehaviour
             $"trackedAxisIncomingDot={axisIncomingAlignment:F3}, " +
             $"physicsAxisIncomingDot={physicsAxisIncomingAlignment:F3} " +
             "(0 is perpendicular)\n" +
-            $"anchorRotation={body.anchorRotation.eulerAngles}, " +
             $"limits=[{body.xDrive.lowerLimit:F2},{body.xDrive.upperLimit:F2}], " +
             $"jointPositionDof={body.jointPosition.dofCount}");
     }
