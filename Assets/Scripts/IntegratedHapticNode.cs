@@ -151,12 +151,6 @@ public class IntegratedHapticNode : HapticNode
         physicsAb.AddTorque(newPhysicsTorque);
         physicsAb.AddForce(newPhysicsForce);
 
-        if (useChainedMass)
-        {
-            DistributeWrenchToArticulation();
-        }
-        
-
         // Updates haptic node state
         Vector3 inertiaForce = -physicsMass * physicsAccel;
         UpdateState(-prevPhysicsForce, inertiaForce);
@@ -169,38 +163,6 @@ public class IntegratedHapticNode : HapticNode
     // Update is called once per frame
     void Update()
     {
-    }
-
-    public void DistributeWrenchToArticulation()
-    {
-        jointCoriolisCentrifugalForces.Clear();
-        jointExternalForces.Clear();
-        int coriolisDofCount =
-            physicsAb.GetJointCoriolisCentrifugalForces(
-                jointCoriolisCentrifugalForces);
-        int externalDofCount =
-            physicsAb.GetJointExternalForces(
-                jointExternalForces,
-                Time.fixedDeltaTime);
-
-        if (coriolisDofCount != externalDofCount)
-        {
-            Debug.LogError(
-                $"[{name}] Articulation force DOF counts differ: " +
-                $"Coriolis={coriolisDofCount}, " +
-                $"External={externalDofCount}.");
-            return;
-        }
-
-        jointForces.Clear();
-        for (int i = 0; i < coriolisDofCount; i++)
-        {
-            jointForces.Add(
-                -jointCoriolisCentrifugalForces[i]
-                - jointExternalForces[i]);
-        }
-
-        physicsAb.SetJointForces(jointForces);
     }
 
     private void UpdateKinematics()

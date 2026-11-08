@@ -771,6 +771,25 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 8609037504304071432, guid: 3f7511fbc40ae7a4b89c3298a3de199d, type: 3}
   m_PrefabInstance: {fileID: 425793254}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1068190429 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 1616432292500642482, guid: 0886c7611c132684ea26007d1113e53c, type: 3}
+  m_PrefabInstance: {fileID: 1328886403}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1068190436
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1068190429}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ba1c042936a21e244bf6ad51a95574d2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  moveSpeed: 0.1
+  rotateSpeed: 100
 --- !u!1001 &1124600786
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1222,6 +1241,14 @@ PrefabInstance:
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
       objectReference: {fileID: 2100000, guid: 5c829de98951efe4f845b85f53b0e3d0, type: 2}
+    - target: {fileID: 7400857062802266982, guid: 0886c7611c132684ea26007d1113e53c, type: 3}
+      propertyPath: m_UseGravity
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7400857062802266982, guid: 0886c7611c132684ea26007d1113e53c, type: 3}
+      propertyPath: m_IsKinematic
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 8372620129679473635, guid: 0886c7611c132684ea26007d1113e53c, type: 3}
       propertyPath: m_LocalScale.x
       value: 0.05
@@ -1277,7 +1304,10 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 1616432292500642482, guid: 0886c7611c132684ea26007d1113e53c, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1068190436}
   m_SourcePrefab: {fileID: 100100000, guid: 0886c7611c132684ea26007d1113e53c, type: 3}
 --- !u!4 &1371005656 stripped
 Transform:
@@ -1692,7 +1722,7 @@ MonoBehaviour:
   serverPort: 8080
   forceFeedback: 1
   useInertia: 0
-  collisionFilter: 1
+  collisionFilter: 0
   visualization: 1
   forceVisualPrefab: {fileID: 910768547617064684, guid: 2a12e6e218c663347ad7214e1fb1b21d, type: 3}
   forceVisualScale: 0.005

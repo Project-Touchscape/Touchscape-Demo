@@ -484,7 +484,7 @@ public class HandSkeleton : MonoBehaviour
         }
 
         rootBody.mass = Mathf.Epsilon;
-        rootBody.immovable = false;
+        rootBody.immovable = true;
         rootBody.useGravity = useGravity;
         rootBody.linearDamping = 0f;
         rootBody.angularDamping = 0f;
