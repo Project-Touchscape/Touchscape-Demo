@@ -1049,8 +1049,8 @@ MonoBehaviour:
   palmPosDamping: 1
   palmRotStiffness: 0.9
   palmRotDamping: 1
-  palmMaxForce: 10000
-  palmMaxTorque: 5000
+  palmMaxForce: 2000
+  palmMaxTorque: 1000
   fingerStiffness: 50
   fingerDamping: 1
   fingerMaxTorque: 5000
@@ -1060,8 +1060,7 @@ MonoBehaviour:
   jointDriveDiagnosticInterval: 0.5
   diagnosticFingerIndex: 1
   diagnosticJointIndex: 2
-  logArticulationStateDiagnostics: 0
-  articulationStateDiagnosticInterval: 0.5
+  diagnosticAxisNum: 0
 --- !u!1 &1169935341
 GameObject:
   m_ObjectHideFlags: 0
@@ -2142,19 +2141,18 @@ MonoBehaviour:
   palmPosDamping: 1
   palmRotStiffness: 0.9
   palmRotDamping: 1
-  palmMaxForce: 10000
-  palmMaxTorque: 5000
+  palmMaxForce: 2000
+  palmMaxTorque: 1000
   fingerStiffness: 50
   fingerDamping: 1
   fingerMaxTorque: 5000
   rootPositionRebuildThreshold: 0.002
   boneLengthRebuildThreshold: 0.002
-  logJointDriveDiagnostics: 0
+  logJointDriveDiagnostics: 1
   jointDriveDiagnosticInterval: 0.5
   diagnosticFingerIndex: 0
   diagnosticJointIndex: 1
-  logArticulationStateDiagnostics: 0
-  articulationStateDiagnosticInterval: 0.5
+  diagnosticAxisNum: 0
 --- !u!1001 &7097662409868287624
 PrefabInstance:
   m_ObjectHideFlags: 0
