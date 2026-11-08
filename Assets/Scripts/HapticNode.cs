@@ -130,18 +130,16 @@ public class HapticNode : MonoBehaviour
     public void UpdateState(Vector3 physicsForce, Vector3 inertiaForce)
     {
         Initialize();
+        
+        // If inertia is disabled, subtract the inertia force from the physics force
+        if (!haptics.useInertia) {
+            physicsForce -= inertiaForce;
+        }
 
-        // If inertia is not enabled, subtracts the inertia force from the physics force
-        if (!haptics.useInertia)
+        // Only uses non-inertial force if there is an active collision
+        if (haptics.collisionFilter && !HasActiveCollision)
         {
-            if (HasActiveCollision)
-            {
-                // Only uses non-inertial force if there is an active collision
-                physicsForce -= inertiaForce;
-            } else
-            {
-                physicsForce = Vector3.zero;
-            }
+            physicsForce = Vector3.zero;
         }
 
         // Clamps force to minimum

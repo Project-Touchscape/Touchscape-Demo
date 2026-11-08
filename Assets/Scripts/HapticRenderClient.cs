@@ -19,6 +19,8 @@ public class HapticRenderClient : MonoBehaviour
 
     public bool useInertia = false;
 
+    public bool collisionFilter = true;
+
     // Whether visualization is enabled
     public bool visualization = false;
 

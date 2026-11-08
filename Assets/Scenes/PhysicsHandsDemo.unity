@@ -626,7 +626,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 425793256}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: ba1c042936a21e244bf6ad51a95574d2, type: 3}
   m_Name: 
@@ -1693,6 +1693,7 @@ MonoBehaviour:
   serverPort: 8080
   forceFeedback: 1
   useInertia: 0
+  collisionFilter: 1
   visualization: 1
   forceVisualPrefab: {fileID: 910768547617064684, guid: 2a12e6e218c663347ad7214e1fb1b21d, type: 3}
   forceVisualScale: 0.005
