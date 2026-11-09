@@ -11,6 +11,7 @@ public class IntegratedHapticNode : HapticNode
     // Tracked node kinematics
     private Vector3 trackedPos = Vector3.zero;
     private Vector3 prevTrackedPos = Vector3.zero;
+    private Vector3 trackedComPos = Vector3.zero;
     private Quaternion trackedRot = Quaternion.identity;
     private Quaternion prevTrackedRot = Quaternion.identity;
     private Vector3 trackedVel = Vector3.zero;
@@ -21,6 +22,7 @@ public class IntegratedHapticNode : HapticNode
 
     // RigidBody of the physics object
     private Rigidbody physicsRb;
+    private ArticulationBody articulationBody;
     private bool physicsBodyErrorLogged;
 
     //Physics node kinematics
@@ -53,15 +55,19 @@ public class IntegratedHapticNode : HapticNode
 
     private bool TryGetPhysicsBody()
     {
-        if (physicsRb != null)
+        if (physicsRb != null || articulationBody != null)
             return true;
 
         if (gameObject.TryGetComponent<Rigidbody>(out physicsRb))
             return true;
 
+        if (gameObject.TryGetComponent<ArticulationBody>(out articulationBody))
+            return true;
+
         if (!physicsBodyErrorLogged)
         {
-            Debug.LogError($"[{name}] IntegratedHapticNode requires a Rigidbody.");
+            Debug.LogError(
+                $"[{name}] IntegratedHapticNode requires a Rigidbody or ArticulationBody.");
             physicsBodyErrorLogged = true;
         }
 
@@ -98,11 +104,19 @@ public class IntegratedHapticNode : HapticNode
             newPhysicsTorque = newPhysicsTorque.normalized * maxPhysicsTorque;
         }
 
-        physicsRb.AddTorque(newPhysicsTorque);
-        physicsRb.AddForce(newPhysicsForce);
+        if (physicsRb != null)
+        {
+            physicsRb.AddTorque(newPhysicsTorque);
+            physicsRb.AddForce(newPhysicsForce);
+        }
+        else
+        {
+            articulationBody.AddTorque(newPhysicsTorque);
+            articulationBody.AddForce(newPhysicsForce);
+        }
 
         // Updates haptic node state
-        Vector3 inertiaForce = -physicsRb.mass * physicsAccel;
+        Vector3 inertiaForce = -GetPhysicsMass() * physicsAccel;
         UpdateState(-prevPhysicsForce, inertiaForce);
 
         //LogDiagnostics(newPhysicsForce, newPhysicsTorque, inertiaForce);
@@ -120,9 +134,6 @@ public class IntegratedHapticNode : HapticNode
         // Tracked position kinematics
         prevTrackedPos = trackedPos;
         trackedPos = trackedTransform.position;
-        prevTrackedVel = trackedVel;
-        trackedVel = (trackedPos - prevTrackedPos) / Time.fixedDeltaTime;
-        trackedAccel = (trackedVel - prevTrackedVel) / Time.fixedDeltaTime;
 
         // Tracked rotation kinematics
         prevTrackedRot = trackedRot;
@@ -130,17 +141,54 @@ public class IntegratedHapticNode : HapticNode
         prevTrackedAngVel = trackedAngVel;
         trackedAngVel = Utils.AngularVelocityFromQuaternions(prevTrackedRot, trackedRot, Time.fixedDeltaTime);
 
+        Vector3 localCenterOfMass = GetLocalCenterOfMass();
+        trackedComPos = trackedPos + trackedRot * localCenterOfMass;
+        Vector3 trackedOriginVel = (trackedPos - prevTrackedPos) / Time.fixedDeltaTime;
+        trackedVel = trackedOriginVel +
+            Vector3.Cross(trackedAngVel, trackedRot * localCenterOfMass);
+        trackedAccel = (trackedVel - prevTrackedVel) / Time.fixedDeltaTime;
+        prevTrackedVel = trackedVel;
+
         // Physics position kinematics
         prevPhysicsVel = physicsVel;
-        physicsVel = physicsRb.linearVelocity;
+        physicsVel = GetPhysicsLinearVelocity();
         physicsAccel = (physicsVel - prevPhysicsVel) / Time.fixedDeltaTime;
 
         // Physics rotation kinematics
         prevPhysicsAngVel = physicsAngVel;
-        physicsAngVel = physicsRb.angularVelocity;
+        physicsAngVel = GetPhysicsAngularVelocity();
         physicsAngAccel = (physicsAngVel - prevPhysicsAngVel) / Time.fixedDeltaTime;
 
-        physicsInertia = Utils.WorldInertiaMatrix(physicsRb);
+        physicsInertia = physicsRb != null
+            ? Utils.WorldInertiaMatrix(physicsRb)
+            : Utils.WorldInertiaMatrix(articulationBody);
+    }
+
+    private float GetPhysicsMass()
+    {
+        return physicsRb != null ? physicsRb.mass : articulationBody.mass;
+    }
+
+    private Vector3 GetLocalCenterOfMass()
+    {
+        Vector3 worldCenterOfMass = physicsRb != null
+            ? physicsRb.worldCenterOfMass
+            : articulationBody.worldCenterOfMass;
+        return transform.InverseTransformPoint(worldCenterOfMass);
+    }
+
+    private Vector3 GetPhysicsLinearVelocity()
+    {
+        return physicsRb != null
+            ? physicsRb.linearVelocity
+            : articulationBody.linearVelocity;
+    }
+
+    private Vector3 GetPhysicsAngularVelocity()
+    {
+        return physicsRb != null
+            ? physicsRb.angularVelocity
+            : articulationBody.angularVelocity;
     }
 
     private Vector3 ComputeForceOnPhysics()
@@ -150,14 +198,17 @@ public class IntegratedHapticNode : HapticNode
             return Vector3.zero;
         }
 
-        Vector3 relPos = physicsRb.transform.position - trackedPos;
+        Vector3 physicsComPos = physicsRb != null
+            ? physicsRb.worldCenterOfMass
+            : articulationBody.worldCenterOfMass;
+        Vector3 relPos = physicsComPos - trackedComPos;
 
         Vector3 relVel = physicsVel - trackedVel;
 
         Vector3 accel =
             -(Utils.GetMaxStiffness() * posStiffness * relPos
             + Utils.GetMaxDamping() * posDamping * relVel);
-        Vector3 force = physicsRb.mass * accel;
+        Vector3 force = GetPhysicsMass() * accel;
         //Print relative position and calculated force
         //Debug.Log($"Relative position: {relPos}, force: {force}");
 
@@ -174,7 +225,7 @@ public class IntegratedHapticNode : HapticNode
         // Calculate the relative rotation from tracked to physics in global coordinates
         Vector3 relRot = Utils.AngularVelocityFromQuaternions(
             trackedRot,
-            physicsRb.transform.rotation,
+            transform.rotation,
             1);
 
         Vector3 relAngVel = physicsAngVel - trackedAngVel;

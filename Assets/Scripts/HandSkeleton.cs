@@ -64,6 +64,18 @@ public class HandSkeleton : MonoBehaviour
 
     public float fingerDamping = 1f;
 
+    [Range(0f, 1f)]
+    public float fingerRootPosStiffness = 0.9f;
+
+    public float fingerRootPosDamping = 1f;
+
+    [Range(0f, 1f)]
+    public float fingerRootRotStiffness = 0.9f;
+
+    public float fingerRootRotDamping = 1f;
+
+    public float fingerMaxForce = 20f;
+
     public float fingerMaxTorque = 40f;
 
     [Header("Articulation Chain Rebuild")]
@@ -90,6 +102,8 @@ public class HandSkeleton : MonoBehaviour
     private Rigidbody wristBody;
     private IntegratedHapticNode wristNode;
     private readonly ArticulationBody[] fingerRoots = new ArticulationBody[N_FINGERS];
+    private readonly IntegratedHapticNode[] fingerRootNodes =
+        new IntegratedHapticNode[N_FINGERS];
 
     private Vector3 palmColliderOffset = new Vector3(0.0047f, -0.0043f, 0.0091f);
     private Vector3 palmColliderRot = new Vector3(5.31f, 4.947f, -0.786f);
@@ -117,8 +131,6 @@ public class HandSkeleton : MonoBehaviour
     private bool[,,] torqueLimitWarnings =
         new bool[N_FINGERS, N_ACTIVE_BONES, 2];
     private bool wristForceLimitWarning;
-    private float nextFingerRootTeleportTime;
-
     private int rebuildLimit = 2;
     private int rebuildCount = 0;
 
@@ -160,8 +172,6 @@ public class HandSkeleton : MonoBehaviour
             wristBody.useGravity = useGravity;
         }
 
-        UpdateFingerRoots();
-
         // Update physics for wrist haptic node
         if (wristNode != null)
         {
@@ -176,6 +186,26 @@ public class HandSkeleton : MonoBehaviour
             // Physics timestep
             wristNode.UpdatePhysics();
             WarnIfWristForceLimitReached();
+        }
+
+        int fingerCount = trackedFingers == null
+            ? 0
+            : Mathf.Min(
+                N_FINGERS,
+                Mathf.Min(fingerRootNodes.Length, trackedFingers.Length));
+        for (int fingerIndex = 0; fingerIndex < fingerCount; fingerIndex++)
+        {
+            IntegratedHapticNode rootNode = fingerRootNodes[fingerIndex];
+            if (rootNode == null)
+                continue;
+
+            rootNode.posStiffness = fingerRootPosStiffness;
+            rootNode.posDamping = fingerRootPosDamping;
+            rootNode.rotStiffness = fingerRootRotStiffness;
+            rootNode.rotDamping = fingerRootRotDamping;
+            rootNode.maxPhysicsForce = fingerMaxForce;
+            rootNode.maxPhysicsTorque = fingerMaxTorque;
+            rootNode.UpdatePhysics();
         }
 
         // Update the articulation bodies' target angles based on the tracked joint rotations
@@ -587,8 +617,8 @@ public class HandSkeleton : MonoBehaviour
 
         ArticulationBody rootBody =
             rootObject.AddComponent<ArticulationBody>();
-        rootBody.mass = Mathf.Epsilon;
-        rootBody.immovable = true;
+        rootBody.mass = perBoneMass;
+        rootBody.immovable = false;
         rootBody.useGravity = useGravity;
         rootBody.linearDamping = 0f;
         rootBody.angularDamping = 0f;
@@ -599,53 +629,23 @@ public class HandSkeleton : MonoBehaviour
 
         firstJoint.transform.SetParent(rootObject.transform, true);
         fingerRoots[fingerIndex] = rootBody;
-    }
 
-    private void UpdateFingerRoots()
-    {
-        if (trackedWrist == null || trackedFingers == null)
-            return;
-
-        if (Time.time < nextFingerRootTeleportTime)
-            return;
-
-        nextFingerRootTeleportTime = Time.time + 1f;
-        int fingerCount = Mathf.Min(
-            N_FINGERS,
-            Mathf.Min(fingerRoots.Length, trackedFingers.Length));
-        for (int fingerIndex = 0; fingerIndex < fingerCount; fingerIndex++)
+        if (trackedFingers != null &&
+            fingerIndex < trackedFingers.Length &&
+            trackedFingers[fingerIndex] != null)
         {
-            SetFingerRootPose(fingerIndex);
+            IntegratedHapticNode rootNode =
+                rootObject.AddComponent<IntegratedHapticNode>();
+            rootNode.haptics = haptics;
+            rootNode.trackedTransform = trackedFingers[fingerIndex];
+            rootNode.posStiffness = fingerRootPosStiffness;
+            rootNode.posDamping = fingerRootPosDamping;
+            rootNode.rotStiffness = fingerRootRotStiffness;
+            rootNode.rotDamping = fingerRootRotDamping;
+            rootNode.maxPhysicsForce = fingerMaxForce;
+            rootNode.maxPhysicsTorque = fingerMaxTorque;
+            fingerRootNodes[fingerIndex] = rootNode;
         }
-    }
-
-    private void SetFingerRootPose(int fingerIndex)
-    {
-        if (trackedWrist == null ||
-            trackedFingers == null ||
-            fingerIndex < 0 ||
-            fingerIndex >= fingerRoots.Length ||
-            fingerIndex >= trackedFingers.Length)
-            return;
-
-        ArticulationBody rootBody = fingerRoots[fingerIndex];
-        Transform trackedFinger = trackedFingers[fingerIndex];
-        if (rootBody == null || trackedFinger == null)
-            return;
-
-        Vector3 relativePosition =
-            trackedWrist.InverseTransformPoint(trackedFinger.position);
-        Quaternion relativeRotation =
-            Quaternion.Inverse(trackedWrist.rotation) *
-            trackedFinger.rotation;
-
-        rootBody.TeleportRoot(
-            gameObject.transform.TransformPoint(relativePosition),
-            gameObject.transform.rotation * relativeRotation);
-
-        //Assigns zero vectors to linear and angular velocity to avoid sudden jumps in the articulation chain
-        rootBody.linearVelocity = Vector3.zero;
-        rootBody.angularVelocity = Vector3.zero;
     }
 
     private void ConstructFingerJoint(int fingerIndex, int jointIndex, GameObject currentJoint)
