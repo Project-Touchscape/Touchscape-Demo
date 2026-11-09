@@ -632,7 +632,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   moveSpeed: 0.1
-  rotateSpeed: 100
+  rotateSpeed: 200
 --- !u!1 &461679718 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 745202707482818649, guid: b3ed8a0a703ebd34a9e44ed3d9f1fcf6, type: 3}
@@ -1054,6 +1054,9 @@ MonoBehaviour:
   fingerStiffness: 50
   fingerDamping: 1
   fingerMaxTorque: 5000
+  fingerPosStiffness: 50
+  fingerPosDamping: 1
+  fingerMaxForce: 1000
   rootPositionRebuildThreshold: 0.002
   boneLengthRebuildThreshold: 0.002
   logJointDriveDiagnostics: 0
@@ -1700,7 +1703,7 @@ MonoBehaviour:
   serverPort: 8080
   forceFeedback: 1
   useInertia: 0
-  collisionFilter: 0
+  collisionFilter: 1
   visualization: 1
   forceVisualPrefab: {fileID: 910768547617064684, guid: 2a12e6e218c663347ad7214e1fb1b21d, type: 3}
   forceVisualScale: 0.005
@@ -2154,9 +2157,12 @@ MonoBehaviour:
   fingerStiffness: 50
   fingerDamping: 1
   fingerMaxTorque: 5000
+  fingerPosStiffness: 50
+  fingerPosDamping: 1
+  fingerMaxForce: 1000
   rootPositionRebuildThreshold: 0.002
   boneLengthRebuildThreshold: 0.002
-  logJointDriveDiagnostics: 1
+  logJointDriveDiagnostics: 0
   jointDriveDiagnosticInterval: 0.5
   diagnosticFingerIndex: 0
   diagnosticJointIndex: 1
