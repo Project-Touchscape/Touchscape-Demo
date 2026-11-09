@@ -45,15 +45,9 @@ public class IntegratedHapticNode : HapticNode
     private Vector3 prevPhysicsForce = Vector3.zero;
     private float nextDiagnosticsTime;
     private int fixedStep;
-    private Vector3 previousRelativePosition = Vector3.zero;
-    private bool hasPreviousRelativePosition;
 
     public bool LastPhysicsForceReachedLimit { get; private set; }
     public float LastPhysicsForceMagnitude { get; private set; }
-
-    private readonly List<float> jointCoriolisCentrifugalForces = new List<float>();
-    private readonly List<float> jointExternalForces = new List<float>();
-    private readonly List<float> jointForces = new List<float>();
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     new protected void Start()
@@ -253,26 +247,6 @@ public class IntegratedHapticNode : HapticNode
         return torque;
     }
 
-    public ArticulationBody GetPhysicsAb()
-    {
-        return physicsAb;
-    }
-
-    public Vector3 GetPhysicsCOM()
-    {
-        return physicsCOM;
-    }
-
-    public Vector3 GetPhysicsAccel()
-    {
-        return physicsAccel;
-    }
-
-    public Vector3 GetPhysicsAngAccel()
-    {
-        return physicsAngAccel;
-    }
-
     private void LogDiagnostics(
         Vector3 forceOnPhysics,
         Vector3 torqueOnPhysics,
@@ -290,13 +264,4 @@ public class IntegratedHapticNode : HapticNode
             $"inertia force={inertiaForce}, |inertia|={inertiaForce.magnitude:F6}, " +
             $"torque={torqueOnPhysics}, |torque|={torqueOnPhysics.magnitude:F6}");
     }
-
-    private static bool IsFinite(Vector3 value)
-    {
-        return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
-    }
-
-    private static bool IsFinite(float value)
-    {
-        return !float.IsNaN(value) && !float.IsInfinity(value);    }
 }

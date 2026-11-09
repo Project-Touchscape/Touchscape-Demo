@@ -65,6 +65,9 @@ public class HandSkeleton : MonoBehaviour
     public float fingerDamping = 1f;
 
     public float fingerMaxTorque = 40f;
+    public float fingerPosStiffness = 1f;
+    public float fingerPosDamping = 1f;
+    public float fingerMaxForce = 20f;
 
     [Header("Articulation Chain Rebuild")]
     [Min(0.0001f)] public float rootPositionRebuildThreshold = 0.002f;
@@ -99,9 +102,7 @@ public class HandSkeleton : MonoBehaviour
     // First joint has splay, second and third do not have splay
     private int[] perJointDOF = new int[N_ACTIVE_BONES] {1, 2, 1, 1};
 
-    private HapticNode[] fingertipNodes = new HapticNode[N_FINGERS];
-    private Vector3[] prevFingertipLinearMomenta = new Vector3[N_FINGERS];
-    private Vector3[] fingertipLinearMomenta = new Vector3[N_FINGERS];
+    private FingertipHapticNode[] fingertipNodes = new FingertipHapticNode[N_FINGERS];
     private Vector3[] prevFingertipForces = new Vector3[N_FINGERS];
     private Vector3[] fingertipForces = new Vector3[N_FINGERS];
 
@@ -212,7 +213,11 @@ public class HandSkeleton : MonoBehaviour
             }
 
             // Updates fingertip haptic node
-            UpdateFingertipNode(fingerIndex);
+            FingertipHapticNode node = fingertipNodes[fingerIndex];
+            node.UpdatePhysics();
+            node.posStiffness = fingerPosStiffness;
+            node.posDamping = fingerPosDamping;
+            node.maxForce = fingerMaxForce;
         }
     }
 
@@ -720,8 +725,8 @@ public class HandSkeleton : MonoBehaviour
         if (currentJoint == null || trackedFingers[fingerIndex] == null)
             return;
 
-        if (!currentJoint.TryGetComponent<HapticNode>(out HapticNode node))
-            node = currentJoint.AddComponent<HapticNode>();
+        if (!currentJoint.TryGetComponent<FingertipHapticNode>(out FingertipHapticNode node))
+            node = currentJoint.AddComponent<FingertipHapticNode>();
 
         // Gets tracked joint
         Transform trackedJoint = trackedFingers[fingerIndex];
@@ -756,6 +761,10 @@ public class HandSkeleton : MonoBehaviour
 
         node.haptics = haptics;
         node.trackedTransform = trackedJoint;
+        node.posStiffness = fingerPosStiffness;
+        node.posDamping = fingerPosDamping;
+        node.maxForce = fingerMaxForce;
+        node.physicsMass = perBoneMass;
         node.SetAttachedColliders(fingerColliders);
         fingertipNodes[fingerIndex] = node;
     }
@@ -954,33 +963,6 @@ public class HandSkeleton : MonoBehaviour
             jointIndex,
             axisNum);
 
-        HapticNode fingertipNode = fingertipNodes[fingerIndex];
-        if (fingertipNode == null)
-            return drive;
-
-        Vector3 jointToFingertip =
-            fingertipNode.trackedTransform.position - trackedJoint.position;
-
-        // Gets relationship between joint torque and fingertip force
-        Vector3 jacobianColumn = Vector3.Cross(axis, jointToFingertip);
-        float jacobianMagnitudeSquared = jacobianColumn.sqrMagnitude;
-        if (jacobianMagnitudeSquared <= Mathf.Epsilon)
-            return drive;
-
-        jacobianColumn /= jacobianMagnitudeSquared;
-
-        // Gets force at fingertip
-        fingertipForces[fingerIndex] += jacobianColumn * driveTorque;
-
-        // Convert this joint's angular velocity into its angular momentum
-        // contribution, then map that contribution to fingertip linear
-        // momentum using the joint-to-fingertip lever arm.
-        float angularMomentum = axisInertia *
-            body.jointVelocity[axisNum];
-
-        Vector3 linearMomentumContribution = jacobianColumn * angularMomentum;
-        fingertipLinearMomenta[fingerIndex] += linearMomentumContribution;
-
         if (logJointDriveDiagnostics &&
             fingerIndex == diagnosticFingerIndex &&
             axisNum == diagnosticAxisNum &&
@@ -1137,38 +1119,6 @@ public class HandSkeleton : MonoBehaviour
             normalizedIncoming,
             unswungOutgoing,
             unswungSplayAxis);
-    }
-
-    private void UpdateFingertipNode(int fingerIndex)
-    {
-        HapticNode node = fingertipNodes[fingerIndex];
-        if (node == null)
-            return;
-
-        Vector3 physicsForce = -prevFingertipForces[fingerIndex];
-        Vector3 fingerInertiaComponent = -(fingertipLinearMomenta[fingerIndex] - prevFingertipLinearMomenta[fingerIndex]) / Time.fixedDeltaTime;
-        Vector3 inertiaForce = fingerInertiaComponent;
-
-        /*Debug.Log(
-            $"fingerIndex: {fingerIndex}\n" +
-            $"rootAccel: {rootNode.GetPhysicsAccel()}\n" +
-            $"physicsForce: {physicsForce}\n" +
-            $"fingerInertiaComponent: {fingerInertiaComponent}\n" +
-            $"rootInertiaComponent: {rootInertiaComponent}\n" +
-            $"inertiaForce: {inertiaForce}\n" +
-            $"totalForce: {physicsForce - inertiaForce}\n"
-        );*/
-
-        node.UpdateState(
-            physicsForce,
-            inertiaForce);
-
-        // Resets fingertip linear momenta and forces for the next frame
-        prevFingertipLinearMomenta[fingerIndex] = fingertipLinearMomenta[fingerIndex];
-        prevFingertipForces[fingerIndex] = fingertipForces[fingerIndex];
-
-        fingertipLinearMomenta[fingerIndex] = Vector3.zero;
-        fingertipForces[fingerIndex] = Vector3.zero;
     }
 
     private void LogJointDriveDiagnostic(
