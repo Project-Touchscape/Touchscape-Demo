@@ -85,6 +85,21 @@ public static class Utils
             Scale(Outer(z, z), body.inertiaTensor.z));
     }
 
+    public static Matrix4x4 WorldInertiaMatrix(Rigidbody body)
+    {
+        Quaternion worldRotation =
+            body.rotation * body.inertiaTensorRotation;
+        Vector3 x = worldRotation * Vector3.right;
+        Vector3 y = worldRotation * Vector3.up;
+        Vector3 z = worldRotation * Vector3.forward;
+
+        return Add(
+            Add(
+                Scale(Outer(x, x), body.inertiaTensor.x),
+                Scale(Outer(y, y), body.inertiaTensor.y)),
+            Scale(Outer(z, z), body.inertiaTensor.z));
+    }
+
     public static void GetChainedMassProperties(ArticulationBody root, out float totalMass, out Vector3 com, out Matrix4x4 totalInertia)
     {
         if (root == null)

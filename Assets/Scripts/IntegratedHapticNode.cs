@@ -8,9 +8,6 @@ using UnityEngine;
 
 public class IntegratedHapticNode : HapticNode
 {
-    [Tooltip("Treat the articulation hierarchy as one equivalent rigid body.")]
-    public bool useChainedMass = false;
-
     // Tracked node kinematics
     private Vector3 trackedPos = Vector3.zero;
     private Vector3 prevTrackedPos = Vector3.zero;
@@ -22,19 +19,11 @@ public class IntegratedHapticNode : HapticNode
     private Vector3 trackedAngVel = Vector3.zero;
     private Vector3 prevTrackedAngVel = Vector3.zero;
 
-    // ArticulationBody of the physics object
-    private ArticulationBody physicsAb;
+    // RigidBody of the physics object
+    private Rigidbody physicsRb;
     private bool physicsBodyErrorLogged;
 
-    // Mass of articulation body
-    private float physicsMass;
-
-    // Intertial matrix of articulation body (world space)
-    private Matrix4x4 physicsInertia;
-
     //Physics node kinematics
-    private Vector3 physicsCOM = Vector3.zero;
-    private Vector3 prevPhysicsCOM = Vector3.zero;
     private Vector3 physicsVel = Vector3.zero;
     private Vector3 prevPhysicsVel = Vector3.zero;
     private Vector3 physicsAccel = Vector3.zero;
@@ -42,6 +31,7 @@ public class IntegratedHapticNode : HapticNode
     private Vector3 prevPhysicsAngVel = Vector3.zero;
     private Vector3 physicsAngAccel = Vector3.zero;
     private Vector3 prevPhysicsForce = Vector3.zero;
+    private Matrix4x4 physicsInertia = Matrix4x4.zero;
     private float nextDiagnosticsTime;
     private int fixedStep;
     private Vector3 previousRelativePosition = Vector3.zero;
@@ -49,10 +39,6 @@ public class IntegratedHapticNode : HapticNode
 
     public bool LastPhysicsForceReachedLimit { get; private set; }
     public float LastPhysicsForceMagnitude { get; private set; }
-
-    private readonly List<float> jointCoriolisCentrifugalForces = new List<float>();
-    private readonly List<float> jointExternalForces = new List<float>();
-    private readonly List<float> jointForces = new List<float>();
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     new protected void Start()
@@ -62,59 +48,24 @@ public class IntegratedHapticNode : HapticNode
 
         // Gets physics object rigidbody
         TryGetPhysicsBody();
-        UpdateMassProperties();
         UpdateKinematics();
     }
 
     private bool TryGetPhysicsBody()
     {
-        if (physicsAb != null)
+        if (physicsRb != null)
             return true;
 
-        if (gameObject.TryGetComponent<ArticulationBody>(out physicsAb))
+        if (gameObject.TryGetComponent<Rigidbody>(out physicsRb))
             return true;
 
         if (!physicsBodyErrorLogged)
         {
-            Debug.LogError($"[{name}] IntegratedHapticNode requires an ArticulationBody.");
+            Debug.LogError($"[{name}] IntegratedHapticNode requires a Rigidbody.");
             physicsBodyErrorLogged = true;
         }
 
         return false;
-    }
-
-    private void SetInitialMassProperties()
-    {
-        physicsMass = physicsAb.mass;
-        physicsInertia = Utils.WorldInertiaMatrix(physicsAb);
-
-        prevPhysicsCOM = physicsCOM;
-        physicsCOM = physicsAb.transform.position;
-    }
-
-    public void SetChainedMassProperties()
-    {
-        if (!TryGetPhysicsBody())
-            return;
-
-        Utils.GetChainedMassProperties(physicsAb, out float mass, out Vector3 com, out Matrix4x4 inertia);
-        physicsMass = mass;
-        physicsInertia = inertia;
-
-        prevPhysicsCOM = physicsCOM;
-        physicsCOM = com;
-    }
-
-    private void UpdateMassProperties()
-    {
-        if (!TryGetPhysicsBody())
-            return;
-
-        if (useChainedMass)
-            SetChainedMassProperties();
-        else
-            SetInitialMassProperties();
-
     }
 
     // Fixed update is called once per physics frame
@@ -124,7 +75,6 @@ public class IntegratedHapticNode : HapticNode
             return;
 
         fixedStep++;
-        UpdateMassProperties();
 
         // Update kinematics of the tracked object
         UpdateKinematics();
@@ -148,11 +98,11 @@ public class IntegratedHapticNode : HapticNode
             newPhysicsTorque = newPhysicsTorque.normalized * maxPhysicsTorque;
         }
 
-        physicsAb.AddTorque(newPhysicsTorque);
-        physicsAb.AddForce(newPhysicsForce);
+        physicsRb.AddTorque(newPhysicsTorque);
+        physicsRb.AddForce(newPhysicsForce);
 
         // Updates haptic node state
-        Vector3 inertiaForce = -physicsMass * physicsAccel;
+        Vector3 inertiaForce = -physicsRb.mass * physicsAccel;
         UpdateState(-prevPhysicsForce, inertiaForce);
 
         //LogDiagnostics(newPhysicsForce, newPhysicsTorque, inertiaForce);
@@ -182,13 +132,15 @@ public class IntegratedHapticNode : HapticNode
 
         // Physics position kinematics
         prevPhysicsVel = physicsVel;
-        physicsVel = (physicsCOM - prevPhysicsCOM) / Time.fixedDeltaTime;
+        physicsVel = physicsRb.linearVelocity;
         physicsAccel = (physicsVel - prevPhysicsVel) / Time.fixedDeltaTime;
 
         // Physics rotation kinematics
         prevPhysicsAngVel = physicsAngVel;
-        physicsAngVel = physicsAb.angularVelocity;
+        physicsAngVel = physicsRb.angularVelocity;
         physicsAngAccel = (physicsAngVel - prevPhysicsAngVel) / Time.fixedDeltaTime;
+
+        physicsInertia = Utils.WorldInertiaMatrix(physicsRb);
     }
 
     private Vector3 ComputeForceOnPhysics()
@@ -198,14 +150,14 @@ public class IntegratedHapticNode : HapticNode
             return Vector3.zero;
         }
 
-        Vector3 relPos = physicsAb.transform.position - trackedPos;
+        Vector3 relPos = physicsRb.transform.position - trackedPos;
 
         Vector3 relVel = physicsVel - trackedVel;
 
         Vector3 accel =
             -(Utils.GetMaxStiffness() * posStiffness * relPos
             + Utils.GetMaxDamping() * posDamping * relVel);
-        Vector3 force = physicsMass * accel;
+        Vector3 force = physicsRb.mass * accel;
         //Print relative position and calculated force
         //Debug.Log($"Relative position: {relPos}, force: {force}");
 
@@ -218,14 +170,11 @@ public class IntegratedHapticNode : HapticNode
         {
             return Vector3.zero;
         }
-        // Get orientations and angular velocities
-        Quaternion trackedRotCopy = trackedRot;
-        Quaternion physicsRot = gameObject.transform.rotation;
-
+        
         // Calculate the relative rotation from tracked to physics in global coordinates
         Vector3 relRot = Utils.AngularVelocityFromQuaternions(
-            trackedRotCopy,
-            physicsRot,
+            trackedRot,
+            physicsRb.transform.rotation,
             1);
 
         Vector3 relAngVel = physicsAngVel - trackedAngVel;
@@ -243,26 +192,6 @@ public class IntegratedHapticNode : HapticNode
         return torque;
     }
 
-    public ArticulationBody GetPhysicsAb()
-    {
-        return physicsAb;
-    }
-
-    public Vector3 GetPhysicsCOM()
-    {
-        return physicsCOM;
-    }
-
-    public Vector3 GetPhysicsAccel()
-    {
-        return physicsAccel;
-    }
-
-    public Vector3 GetPhysicsAngAccel()
-    {
-        return physicsAngAccel;
-    }
-
     private void LogDiagnostics(
         Vector3 forceOnPhysics,
         Vector3 torqueOnPhysics,
@@ -274,19 +203,10 @@ public class IntegratedHapticNode : HapticNode
             $"[{name}] Step={fixedStep}, t={Time.time:F4}, dt={timeStep:F6}\n" +
             $"tracked pos={trackedPos:F4}, prev={prevTrackedPos:F4}, " +
             $"vel={trackedVel}, prevVel={prevTrackedVel}\n" +
-            $"physics pos={physicsCOM:F4}, vel={physicsVel:F4}, " +
-            $"accel={physicsAccel}, mass={physicsMass:F6}\n" +
+            $"physics pos={physicsRb.transform.position:F4}, vel={physicsVel:F4}, " +
+            $"accel={physicsAccel}, mass={physicsRb.mass:F6}\n" +
             $"force physics={forceOnPhysics}, |force|={forceOnPhysics.magnitude:F6}, " +
             $"inertia force={inertiaForce}, |inertia|={inertiaForce.magnitude:F6}, " +
             $"torque={torqueOnPhysics}, |torque|={torqueOnPhysics.magnitude:F6}");
     }
-
-    private static bool IsFinite(Vector3 value)
-    {
-        return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
-    }
-
-    private static bool IsFinite(float value)
-    {
-        return !float.IsNaN(value) && !float.IsInfinity(value);    }
 }
