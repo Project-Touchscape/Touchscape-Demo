@@ -753,7 +753,8 @@ public class HandSkeleton : MonoBehaviour
             Collider collider = jointCollider == null
                 ? null
                 : jointCollider.GetComponent<Collider>();
-            if (collider != null)
+            bool isNonThumbMetacarpal = !IsThumb(fingerIndex) && jointIndex == 0;
+            if (collider != null && !isNonThumbMetacarpal)
                 fingerColliders.Add(collider);
 
             fingerJoint = GetBoneChild(fingerJoint);
