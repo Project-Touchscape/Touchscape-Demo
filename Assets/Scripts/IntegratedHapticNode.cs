@@ -14,6 +14,7 @@ public class IntegratedHapticNode : HapticNode
     // Tracked node kinematics
     private Vector3 trackedPos = Vector3.zero;
     private Vector3 prevTrackedPos = Vector3.zero;
+    private Vector3 trackedCOM = Vector3.zero;
     private Quaternion trackedRot = Quaternion.identity;
     private Quaternion prevTrackedRot = Quaternion.identity;
     private Vector3 trackedVel = Vector3.zero;
@@ -89,7 +90,7 @@ public class IntegratedHapticNode : HapticNode
         physicsInertia = Utils.WorldInertiaMatrix(physicsAb);
 
         prevPhysicsCOM = physicsCOM;
-        physicsCOM = physicsAb.transform.position;
+        physicsCOM = physicsAb.worldCenterOfMass;
     }
 
     public void SetChainedMassProperties()
@@ -170,15 +171,24 @@ public class IntegratedHapticNode : HapticNode
         // Tracked position kinematics
         prevTrackedPos = trackedPos;
         trackedPos = trackedTransform.position;
-        prevTrackedVel = trackedVel;
-        trackedVel = (trackedPos - prevTrackedPos) / Time.fixedDeltaTime;
-        trackedAccel = (trackedVel - prevTrackedVel) / Time.fixedDeltaTime;
 
         // Tracked rotation kinematics
         prevTrackedRot = trackedRot;
         trackedRot = trackedTransform.rotation;
         prevTrackedAngVel = trackedAngVel;
         trackedAngVel = Utils.AngularVelocityFromQuaternions(prevTrackedRot, trackedRot, Time.fixedDeltaTime);
+
+        Vector3 localCOMOffset =
+            physicsAb.transform.InverseTransformPoint(physicsCOM);
+        Vector3 worldCOMOffset = trackedRot * localCOMOffset;
+        trackedCOM = trackedPos + worldCOMOffset;
+
+        prevTrackedVel = trackedVel;
+        Vector3 trackedOriginVelocity =
+            (trackedPos - prevTrackedPos) / Time.fixedDeltaTime;
+        trackedVel = trackedOriginVelocity +
+            Vector3.Cross(trackedAngVel, worldCOMOffset);
+        trackedAccel = (trackedVel - prevTrackedVel) / Time.fixedDeltaTime;
 
         // Physics position kinematics
         prevPhysicsVel = physicsVel;
@@ -198,7 +208,7 @@ public class IntegratedHapticNode : HapticNode
             return Vector3.zero;
         }
 
-        Vector3 relPos = physicsAb.transform.position - trackedPos;
+        Vector3 relPos = physicsCOM - trackedCOM;
 
         Vector3 relVel = physicsVel - trackedVel;
 
