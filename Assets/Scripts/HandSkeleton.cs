@@ -931,38 +931,10 @@ public class HandSkeleton : MonoBehaviour
 
         // Update stiffness and damping in case they have changed
 
-        // Finds moment of inertia of current body and its children
-        Utils.GetChainedMassProperties(body, out float totalMass, out Vector3 com, out Matrix4x4 totalInertia);
-
-        // Applies coefficients to get necessary angular acceleration
-        Vector3 jointPoint = body.transform.position;
-
-        float axisInertia = Utils.InertiaAboutAxisAtPoint(
-            totalInertia,
-            totalMass,
-            com,
-            jointPoint,
-            axis);
-
-        drive.stiffness = fingerStiffness * axisInertia * Utils.GetMaxStiffness();
-        drive.damping = fingerDamping * axisInertia * Utils.GetMaxDamping();
+        drive.stiffness = fingerStiffness;// * axisInertia * Utils.GetMaxStiffness();
+        drive.damping = fingerDamping;//axisInertia * Utils.GetMaxDamping();
         drive.forceLimit = fingerMaxTorque;
         drive.target = targetAngle;
-
-        float currentPhysicsAngle = body.jointPosition[axisNum] * Mathf.Rad2Deg;
-        float angularError = (currentPhysicsAngle - targetAngle) * Mathf.Deg2Rad;
-        float driveTorque = -(drive.stiffness * angularError + drive.damping * body.jointVelocity[axisNum]);
-        float requestedTorque = driveTorque;
-
-        // Clamp the drive torque to the torque limit
-        driveTorque = Mathf.Clamp(driveTorque, -drive.forceLimit, drive.forceLimit);
-        WarnIfTorqueLimitReached(
-            body,
-            requestedTorque,
-            drive.forceLimit,
-            fingerIndex,
-            jointIndex,
-            axisNum);
 
         if (logJointDriveDiagnostics &&
             fingerIndex == diagnosticFingerIndex &&
@@ -981,7 +953,6 @@ public class HandSkeleton : MonoBehaviour
                 axis,
                 trackedAngle,
                 targetAngle,
-                driveTorque,
                 fingerIndex,
                 jointIndex,
                 axisNum);
@@ -1131,7 +1102,6 @@ public class HandSkeleton : MonoBehaviour
         Vector3 axis,
         float trackedAngle,
         float targetAngle,
-        float driveTorque,
         int fingerIndex,
         int jointIndex,
         int axisNum)
@@ -1160,7 +1130,6 @@ public class HandSkeleton : MonoBehaviour
             $"physics='{body.name}', tracked='{trackedJoint.name}'\n" +
             $"trackedAngle={trackedAngle:F2} deg, target={targetAngle:F2} deg, " +
             $"actual={actualAngle:F2} deg, error={Mathf.DeltaAngle(actualAngle, targetAngle):F2} deg, " +
-            $"driveTorque={driveTorque}\n" +
             $"axis={axis}\n" +
             $"trackedIncoming={incomingBone.normalized}, " +
             $"trackedOutgoing={outgoingBone.normalized}\n" +
