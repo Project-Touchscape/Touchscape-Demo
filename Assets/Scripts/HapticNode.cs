@@ -188,16 +188,6 @@ public class HapticNode : MonoBehaviour
             activeCollisions.Remove(collision.collider.GetInstanceID());
         }
 
-        private void OnTriggerEnter(Collider other)
-        {
-            activeCollisions.Add(other.GetInstanceID());
-        }
-
-        private void OnTriggerExit(Collider other)
-        {
-            activeCollisions.Remove(other.GetInstanceID());
-        }
-
         private void OnDisable()
         {
             activeCollisions.Clear();
